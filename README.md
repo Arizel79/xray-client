@@ -571,7 +571,7 @@ uv sync
 pytest
 
 # Format code
-black src/
+isort src && black src/
 
 # Type checking
 mypy src/
