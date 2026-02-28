@@ -48,7 +48,7 @@ class ConfigGenerator:
                 "tag": "socks-in",
             },
             {
-                "port": self.settings.local_http_port,
+                "port": self.settings.listen_http_port,
                 "listen": self.settings.listen_host,
                 "protocol": "http",
                 "settings": {},
