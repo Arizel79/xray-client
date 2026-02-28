@@ -274,10 +274,10 @@ def subscribe_update(name: str | None):
         config_mgr = ConfigManager()
         sub_mgr = SubscriptionManager()
         
-        # Load config to get HWID settings
+        # Load config to get subscriptions headers
         config = config_mgr.load()
-        hwid_enabled = config.settings.enable_hwid
-        hwid = config.settings.hwid if hwid_enabled else None
+        headers_enable = config.settings.subscription_headers_enable
+        headers = config.settings.subscription_headers
 
         # Get subscriptions to update
         if name:
@@ -297,14 +297,13 @@ def subscribe_update(name: str | None):
         for sub in subscriptions:
             click.echo(f"Updating subscription: {sub.name}...")
             
-            if hwid_enabled:
-                click.echo(f"  Using HWID header: {hwid}")
+            if headers_enable:
+                click.echo(f"  Using header headers: {headers}")
 
             try:
                 servers = sub_mgr.update_subscription(
                     sub.url, 
-                    hwid_enabled=hwid_enabled, 
-                    hwid=hwid
+                    headers=headers if headers_enable else None
                 )
                 click.echo(f"  Found {len(servers)} servers")
 
@@ -428,71 +427,55 @@ def test(server_id: str | None, timeout: int):
 
 
 @cli.group()
-def hwid():
+def subscription_headers():
     pass
 
 
-@hwid.command(name="enable")
-def hwid_enable():
+@subscription_headers.command(name="enable")
+def subscription_headers_enable():
     try:
         config_mgr = ConfigManager()
         config = config_mgr.load()
         
-        config.settings.enable_hwid = True
+        config.settings.subscription_headers_enable = True
         config_mgr.save(config)
         
-        click.echo("HWID enabled")
+        click.echo("Subscriptions headers enabled")
         
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
-@hwid.command(name="disable")
-def hwid_disable():
+@subscription_headers.command(name="disable")
+def subscription_headers_disable():
     try:
         config_mgr = ConfigManager()
         config = config_mgr.load()
         
-        config.settings.enable_hwid = False
+        config.settings.subscription_headers_enable = False
         config_mgr.save(config)
         
-        click.echo("HWID disabled")
+        click.echo("Subscriptions headers disable")
         
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
-@hwid.command(name="set")
-@click.argument("hwid")
-def hwid_set(hwid: str):
+
+@subscription_headers.command(name="status")
+def subscription_headers_status():
     try:
         config_mgr = ConfigManager()
         config = config_mgr.load()
         
-        config.settings.hwid = hwid
-        config_mgr.save(config)
-        
-        click.echo(f"HWID string set to: {hwid}")
-        
-    except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
-
-
-@hwid.command(name="status")
-def hwid_status():
-    try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-        
-        if config.settings.enable_hwid:
-            click.echo("HWID: enabled")
+        if config.settings.subscription_headers_enable:
+            click.echo("Subscriptions headers: enabled")
         else:
-            click.echo("HWID: disabled")
-        if config.settings.hwid:
-            click.echo(f"HWID string: {config.settings.hwid}")
+            click.echo("Subscriptions headers: disabled")
+        if config.settings.subscription_headers:
+            click.echo(f"Subscriptions headers: {config.settings.subscription_headers}")
         
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

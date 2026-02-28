@@ -68,9 +68,9 @@ class Settings(BaseModel):
     update_interval_hours: int = 24
     log_level: str = "warning"
 
-    # Subscriptions HWID
-    enable_hwid: bool = False
-    hwid: Optional[str] = None
+    # Subscriptions headers
+    subscription_headers_enable: bool = False
+    subscription_headers: Dict[str, str] = Field(default_factory=dict)
 
 
 class Config(BaseModel):
