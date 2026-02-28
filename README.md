@@ -1,6 +1,6 @@
 # XRAY Client
 
-Python CLI client for XRAY/VLESS VPN with subscription support. A lightweight, easy-to-use alternative to GUI clients with full support for subscriptions from Marzban, v2raytun, and other standard providers.
+Python CLI client for XRAY/VLESS VPN with subscription support. A lightweight, easy-to-use alternative to GUI clients with full support for subscriptions from c, v2raytun, and other standard providers.
 
 ## Features
 
@@ -44,6 +44,26 @@ uv run xray-client subscribe add "my-vpn" "http://your-subscription-url"
 
 # Fetch servers from subscription
 uv run xray-client subscribe update
+```
+
+## HWID (Hardware ID) Support
+Some subscription services require HWID (Hardware ID) authentication. XRAY Client supports sending custom HWID headers with subscription requests.
+
+```bash
+# Enable HWID support
+uv run xray-client hwid enable
+
+# Disable HWID support
+uv run xray-client hwid disable
+
+# Set HWID string
+uv run xray-client hwid set "your-hwid-value"
+
+# Set random HWID string
+uv run xray-client hwid set "${uidgen}"
+
+# Check HWID status
+uv run xray-client hwid status
 ```
 
 ### 2. Test and Connect

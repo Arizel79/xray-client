@@ -482,7 +482,7 @@ def hwid_set(hwid: str):
 
 
 @hwid.command(name="status")
-def testfunc_status():
+def hwid_status():
     try:
         config_mgr = ConfigManager()
         config = config_mgr.load()
@@ -499,5 +499,3 @@ def testfunc_status():
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    cli()
