@@ -37,6 +37,7 @@ class ServerConfig(BaseModel):
     subscription: Optional[str] = None  # Name of subscription this server belongs to
     added_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
+
     # VMess specific
     alter_id: Optional[int] = None
 
@@ -66,6 +67,10 @@ class Settings(BaseModel):
     auto_update_subscriptions: bool = True
     update_interval_hours: int = 24
     log_level: str = "warning"
+
+    # Subscriptions HWID
+    enable_hwid: bool = False
+    hwid: Optional[str] = None
 
 
 class Config(BaseModel):

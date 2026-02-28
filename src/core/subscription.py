@@ -21,12 +21,15 @@ class SubscriptionManager:
             "vmess": VMessParser(),
         }
 
-    def fetch_subscription(self, url: str, timeout: int = 30) -> str:
+    def fetch_subscription(self, url: str, timeout: int = 30, 
+        hwid_enabled: bool = False, hwid: str = None) -> str:
         """Fetch subscription content from URL.
 
         Args:
             url: Subscription URL
             timeout: Request timeout in seconds
+            hwid_enabled: Whether to include HWID header
+            hwid: HWID value to include in header
 
         Returns:
             Raw subscription content (base64-encoded text)
@@ -35,8 +38,12 @@ class SubscriptionManager:
             RuntimeError: If fetch fails
         """
         try:
+            headers = {}
+            if hwid_enabled and hwid:
+                headers["X-HWID"] = hwid
+                
             with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-                response = client.get(url)
+                response = client.get(url, headers=headers)
                 response.raise_for_status()
                 return response.text
 
@@ -112,11 +119,13 @@ class SubscriptionManager:
 
         return servers
 
-    def update_subscription(self, url: str) -> List[ServerConfig]:
+    def update_subscription(self, url: str, hwid_enabled: bool = False, hwid: str = None) -> List[ServerConfig]:
         """Fetch and parse a subscription.
 
         Args:
             url: Subscription URL
+            hwid_enabled: Whether to include HWID header
+            hwid: HWID value to include in header
 
         Returns:
             List of parsed ServerConfig objects
@@ -126,7 +135,7 @@ class SubscriptionManager:
             ValueError: If parsing fails
         """
         # Fetch subscription
-        content = self.fetch_subscription(url)
+        content = self.fetch_subscription(url, hwid_enabled=hwid_enabled, hwid=hwid)
 
         # Decode base64
         links = self.decode_subscription(content)

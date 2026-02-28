@@ -266,7 +266,6 @@ def subscribe_add(name: str, url: str):
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
-
 @subscribe.command(name="update")
 @click.argument("name", required=False)
 def subscribe_update(name: str | None):
@@ -274,6 +273,11 @@ def subscribe_update(name: str | None):
     try:
         config_mgr = ConfigManager()
         sub_mgr = SubscriptionManager()
+        
+        # Load config to get HWID settings
+        config = config_mgr.load()
+        hwid_enabled = config.settings.enable_hwid
+        hwid = config.settings.hwid if hwid_enabled else None
 
         # Get subscriptions to update
         if name:
@@ -292,9 +296,16 @@ def subscribe_update(name: str | None):
         # Update each subscription
         for sub in subscriptions:
             click.echo(f"Updating subscription: {sub.name}...")
+            
+            if hwid_enabled:
+                click.echo(f"  Using HWID header: {hwid}")
 
             try:
-                servers = sub_mgr.update_subscription(sub.url)
+                servers = sub_mgr.update_subscription(
+                    sub.url, 
+                    hwid_enabled=hwid_enabled, 
+                    hwid=hwid
+                )
                 click.echo(f"  Found {len(servers)} servers")
 
                 # Update config
@@ -308,7 +319,6 @@ def subscribe_update(name: str | None):
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
-
 
 @subscribe.command(name="list")
 def subscribe_list():
@@ -412,6 +422,78 @@ def test(server_id: str | None, timeout: int):
                 else:
                     click.echo(f"{name:30} {address:25} TIMEOUT")
 
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.group()
+def hwid():
+    pass
+
+
+@hwid.command(name="enable")
+def hwid_enable():
+    try:
+        config_mgr = ConfigManager()
+        config = config_mgr.load()
+        
+        config.settings.enable_hwid = True
+        config_mgr.save(config)
+        
+        click.echo("HWID enabled")
+        
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@hwid.command(name="disable")
+def hwid_disable():
+    try:
+        config_mgr = ConfigManager()
+        config = config_mgr.load()
+        
+        config.settings.enable_hwid = False
+        config_mgr.save(config)
+        
+        click.echo("HWID disabled")
+        
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@hwid.command(name="set")
+@click.argument("hwid")
+def hwid_set(hwid: str):
+    try:
+        config_mgr = ConfigManager()
+        config = config_mgr.load()
+        
+        config.settings.hwid = hwid
+        config_mgr.save(config)
+        
+        click.echo(f"HWID string set to: {hwid}")
+        
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@hwid.command(name="status")
+def testfunc_status():
+    try:
+        config_mgr = ConfigManager()
+        config = config_mgr.load()
+        
+        if config.settings.enable_hwid:
+            click.echo("HWID: enabled")
+        else:
+            click.echo("HWID: disabled")
+        if config.settings.hwid:
+            click.echo(f"HWID string: {config.settings.hwid}")
+        
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
