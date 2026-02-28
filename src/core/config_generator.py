@@ -34,22 +34,22 @@ class ConfigGenerator:
         return config
 
     def _generate_inbounds(self) -> list:
-        """Generate inbound configurations (local SOCKS5 and HTTP).
+        """Generate inbound configurations (SOCKS5 and HTTP).
 
         Returns:
             List of inbound configs
         """
         return [
             {
-                "port": self.settings.local_socks_port,
-                "listen": "127.0.0.1",
+                "port": self.settings.listen_socks_port,
+                "listen": self.settings.listen_host,
                 "protocol": "socks",
                 "settings": {"udp": True, "auth": "noauth"},
                 "tag": "socks-in",
             },
             {
                 "port": self.settings.local_http_port,
-                "listen": "127.0.0.1",
+                "listen": self.settings.listen_host,
                 "protocol": "http",
                 "settings": {},
                 "tag": "http-in",

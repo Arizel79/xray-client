@@ -62,8 +62,10 @@ class Subscription(BaseModel):
 class Settings(BaseModel):
     """Application settings model."""
 
-    local_socks_port: int = 1080
-    local_http_port: int = 1081
+    listen_host: str = "127.0.0.1"
+    listen_socks_port: int = 1080
+    listen_http_port: int = 1081
+
     auto_update_subscriptions: bool = True
     update_interval_hours: int = 24
     log_level: str = "warning"

@@ -57,8 +57,8 @@ def connect(server_name_or_id: str):
         config_mgr.set_current_server(str(server.id))
 
         click.echo(f"Connected to {server.name}")
-        click.echo(f"SOCKS5: 127.0.0.1:{config.settings.local_socks_port}")
-        click.echo(f"HTTP: 127.0.0.1:{config.settings.local_http_port}")
+        click.echo(f"SOCKS5: {config.settings.listen_host}:{config.settings.listen_socks_port}")
+        click.echo(f"HTTP: {config.settings.listen_host}:{config.settings.listen_http_port}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -111,8 +111,8 @@ def status():
             click.echo(f"Address: {current_server.address}:{current_server.port}")
 
         config = config_mgr.load()
-        click.echo(f"SOCKS5: 127.0.0.1:{config.settings.local_socks_port}")
-        click.echo(f"HTTP: 127.0.0.1:{config.settings.local_http_port}")
+        click.echo(f"SOCKS5: {config.settings.listen_host}:{config.settings.listen_socks_port}")
+        click.echo(f"HTTP: {config.settings.listen_host}:{config.settings.listen_http_port}")
 
         click.echo(f"\nProcess Info:")
         click.echo(f"  PID: {status['pid']}")
