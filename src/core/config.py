@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class ServerConfig(BaseModel):
     """Server configuration model."""
 
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: int = Field(default_factory=lambda: 0)
     name: str
     protocol: str  # vless, vmess, trojan, shadowsocks
     address: str
@@ -144,15 +144,17 @@ class ConfigManager:
         """
         config = self.load()
 
-        # Check if server with same ID already exists
-        existing_ids = {s.id for s in config.servers}
-        if server.id in existing_ids:
-            # Generate new ID
-            server.id = str(uuid.uuid4())
+        # Generate new numeric ID (всегда, даже если ID уже был)
+        if config.servers:
+            # Найти максимальный ID и добавить 1
+            max_id = max(s.id for s in config.servers)
+            server.id = max_id + 1
+        else:
+            server.id = 1  # Первый сервер
 
         config.servers.append(server)
         self.save(config)
-
+        
     def remove_server(self, server_id: str) -> bool:
         """Remove a server from configuration.
 
@@ -304,8 +306,11 @@ class ConfigManager:
 
         # Add new servers
         for server in servers:
-            server.subscription = subscription_name
-            config.servers.append(server)
+            if config.servers:
+                max_id = max(s.id for s in config.servers)
+                server.id = max_id + 1
+            else:
+                server.id = 1
 
         # Update subscription last_update
         for sub in config.subscriptions:
@@ -333,5 +338,9 @@ class ConfigManager:
         """
         config = self.load()
         if config.current_server:
-            return self.get_server(config.current_server)
+            try:
+                server_id = int(config.current_server)
+                return self.get_server(server_id)
+            except ValueError:
+                return None
         return None

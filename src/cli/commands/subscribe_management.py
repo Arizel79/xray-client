@@ -27,7 +27,7 @@ def subscribe_add(name: str, url: str):
 
         click.echo(f"Added subscription: {name}")
         click.echo(f"URL: {truncate_string(url, 60)}")
-        click.echo("\nRun 'xray-client subscribe update' to fetch servers")
+        click.echo("\nRun 'subscribe update' to fetch servers")
 
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)

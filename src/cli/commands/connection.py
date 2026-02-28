@@ -21,11 +21,18 @@ def connect(server_name_or_id: str):
 
         # Check if already running
         if process_mgr.is_running():
-            click.echo("Already connected. Disconnect first or use reconnect.")
+            click.echo("Already connected. Disconnect first.")
             sys.exit(1)
 
         # Find server
-        server = config_mgr.get_server(server_name_or_id)
+        server = None
+        
+        try:
+            server_id = int(server_name_or_id)
+            server = config_mgr.get_server(server_id)
+        except ValueError:
+            pass
+            
         if not server:
             server = config_mgr.find_server_by_name(server_name_or_id)
 
@@ -47,7 +54,7 @@ def connect(server_name_or_id: str):
         process_mgr.start(xray_path, xray_config)
 
         # Update current server
-        config_mgr.set_current_server(server.id)
+        config_mgr.set_current_server(str(server.id))
 
         click.echo(f"Connected to {server.name}")
         click.echo(f"SOCKS5: 127.0.0.1:{config.settings.local_socks_port}")
