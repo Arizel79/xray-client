@@ -13,19 +13,17 @@ from src.core.process_manager import ProcessManager
 
 
 class SubscriptionUpdater:
-    def __init__(self):
+    def __init__(self, check_config_interval=60, polling_interval=20):
         self.running = True
         self.shutdown_requested = False
         self.config_mgr = ConfigManager()
         self.sub_mgr = SubscriptionManager()
         self.process_mgr = ProcessManager()
-        self.check_interval = 10
+        self.check_config_interval = check_config_interval
+        self.polling_interval = polling_interval
 
         logger.remove()
         logger.add(sys.stdout, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}", level="DEBUG", colorize=True)
-        log_dir = Path.home() / ".xray-client" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        logger.add(log_dir / "updater_{time:YYYY-MM-DD}.log", format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}", level="DEBUG", rotation="1 day", retention="30 days", compression="gz")
 
         logger.info("XRAY Client subscription updater initialized")
 
@@ -41,19 +39,19 @@ class SubscriptionUpdater:
         try:
             while self.running:
                 try:
-                    if time.time() - last_config_check > self.check_interval:
+                    if time.time() - last_config_check > self.check_config_interval:
                         config = self.config_mgr.load()
                         last_config_check = time.time()
                         if not config.settings.auto_update_subscriptions:
                             logger.debug("Auto-update is disabled in config")
-                            time.sleep(self.check_interval)
+                            time.sleep(self.check_config_interval)
                             continue
                         update_interval = config.settings.update_interval_seconds
                         logger.debug(f"Update interval from config: {update_interval}s")
 
                     if not config or not config.subscriptions:
                         logger.debug("No subscriptions configured")
-                        time.sleep(self.check_interval)
+                        time.sleep(self.check_config_interval)
                         continue
 
                     now = datetime.utcnow()
@@ -75,7 +73,7 @@ class SubscriptionUpdater:
                             self._update_subscription(sub, config)
                             last_update_time[sub.name] = now
 
-                    time.sleep(60)
+                    time.sleep(self.polling_interval)
 
                 except Exception as e:
                     logger.error(f"Error in main loop: {e}")
@@ -92,15 +90,36 @@ class SubscriptionUpdater:
         try:
             headers = config.settings.subscription_headers if config.settings.subscription_headers_enable else None
             logger.info(f"Updating {sub.name}")
-            logger.debug(f"URL: {sub.url[:100]}...")
+            logger.debug(f"URL: {sub.url}.")
 
-            servers = self.sub_mgr.update_subscription(sub.url, headers=headers)
-            self.config_mgr.update_subscription_servers(sub.name, servers)
+            # Получаем старый список серверов этой подписки
+            old_servers = self.config_mgr.get_servers_by_subscription(sub.name)
+            old_set = {(s.address, s.port, s.name, s.uuid) for s in old_servers}
 
-            logger.success(f"Received {len(servers)} servers from {sub.name}")
-            logger.debug(f"Servers: {[s.name for s in servers]}")
+            # Получаем новые серверы
+            new_servers = self.sub_mgr.update_subscription(sub.url, headers=headers)
+            new_set = {(s.address, s.port, s.name, s.uuid) for s in new_servers}
 
-            self._restart_instances_for_subscription(sub.name, config)
+            # Обновляем конфиг (всегда, даже если без изменений, чтобы обновить last_update)
+            self.config_mgr.update_subscription_servers(sub.name, new_servers)
+
+            logger.debug(f"old: {old_set} new: {new_set}")
+            if old_set == new_set:
+                logger.info(f"No changes in subscription {sub.name}, restart skipped")
+                return
+
+            # Есть изменения
+            added = new_set - old_set
+            removed = old_set - new_set
+            if added:
+                logger.info(f"Added servers: {[addr[2] for addr in added]}")
+            if removed:
+                logger.info(f"Removed servers: {[addr[2] for addr in removed]}")
+
+            if config.settings.restart_xray_on_autoupdate:
+                self._restart_instances_for_subscription(sub.name, config)
+            else:
+                logger.info("Restart on autoupdate is disabled, running instances not restarted")
 
         except Exception as e:
             logger.error(f"Failed to update {sub.name}: {e}")

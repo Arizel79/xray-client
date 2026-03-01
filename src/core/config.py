@@ -82,7 +82,9 @@ class Settings(BaseModel):
     listen_http_port: int = 1081
 
     auto_update_subscriptions: bool = True
-    update_interval_seconds: int = 120
+    update_interval_seconds: int = 60 * 30
+    restart_xray_on_autoupdate: bool = True
+
     log_level: str = "warning"
 
     # Subscriptions headers
@@ -151,7 +153,10 @@ class ConfigManager:
         except Exception as e:
             temp_file.unlink(missing_ok=True)
             raise RuntimeError(f"Failed to save config: {e}")
-
+    def get_servers_by_subscription(self, sub_name: str) -> List[ServerConfig]:
+        """Get all servers belonging to a subscription."""
+        config = self.load()
+        return [s for s in config.servers if s.subscription == sub_name]
     def add_server(self, server: ServerConfig) -> None:
         """Add a server to configuration.
 
