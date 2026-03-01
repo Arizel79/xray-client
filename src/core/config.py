@@ -45,6 +45,17 @@ class ServerConfig(BaseModel):
         """String representation of server."""
         return f"{self.name} ({self.protocol}://{self.address}:{self.port})"
 
+class RunningInstance(BaseModel):
+    """Модель запущенного экземпляра Xray"""
+    instance_id: str
+    server_id: int
+    pid: int
+    start_time: str
+    config_path: str
+    listen_host: str = "127.0.0.1"
+    listen_socks_port: Optional[int] = None 
+    listen_http_port: Optional[int] = None 
+    status: str = "running"  # 'running', 'stopped', 'error'
 
 class Subscription(BaseModel):
     """Subscription configuration model."""

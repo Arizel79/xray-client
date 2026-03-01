@@ -285,3 +285,79 @@ class ConfigGenerator:
             reality_settings["spiderX"] = server.spider_x
 
         return reality_settings
+
+    # src/core/config_generator.py - добавить метод
+
+    def generate_for_ports(
+        self, 
+        server: ServerConfig, 
+        listen_host: str = "127.0.0.1",
+        socks_port: Optional[int] = None, 
+        http_port: Optional[int] = None
+        ) -> Dict[str, Any]:
+        """Generate xray-core config with custom host and ports.
+        
+        Args:
+            server: Server configuration
+            listen_host: Host to listen on
+            socks_port: SOCKS5 port (None to disable)
+            http_port: HTTP port (None to disable)
+
+        Returns:
+            Dictionary with xray-core config
+        """
+        config = {
+            "log": {"loglevel": self.settings.log_level},
+            "inbounds": self._generate_inbounds_for_config(listen_host, socks_port, http_port),
+            "outbounds": [self._generate_outbound(server)],
+        }
+        return config
+
+    def _generate_inbounds_for_config(
+        self, 
+        listen_host: str, 
+        socks_port: Optional[int], 
+        http_port: Optional[int]
+    ) -> list:
+        """Generate inbound configurations with custom host and optional ports."""
+        inbounds = []
+        
+        # Добавляем SOCKS5 inbound если указан порт
+        if socks_port is not None:
+            inbounds.append({
+                "port": socks_port,
+                "listen": listen_host,
+                "protocol": "socks",
+                "settings": {"udp": True, "auth": "noauth"},
+                "tag": "socks-in",
+            })
+        
+        # Добавляем HTTP inbound если указан порт
+        if http_port is not None:
+            inbounds.append({
+                "port": http_port,
+                "listen": listen_host,
+                "protocol": "http",
+                "settings": {},
+                "tag": "http-in",
+            })
+        
+        return inbounds
+    def _generate_inbounds_for_ports(self, socks_port: int, http_port: int) -> list:
+        """Generate inbound configurations with custom ports."""
+        return [
+            {
+                "port": socks_port,
+                "listen": self.settings.listen_host,
+                "protocol": "socks",
+                "settings": {"udp": True, "auth": "noauth"},
+                "tag": "socks-in",
+            },
+            {
+                "port": http_port,
+                "listen": self.settings.listen_host,
+                "protocol": "http",
+                "settings": {},
+                "tag": "http-in",
+            },
+        ]

@@ -3,7 +3,7 @@
 import click
 
 from src.cli.commands import (
-    connect, disconnect, status,
+    connection,  # Новая группа команд
     server,
     subscribe,
     settings
@@ -11,16 +11,14 @@ from src.cli.commands import (
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version="0.2.0")
 def cli():
     """XRAY Client - Python CLI for VLESS VPN with subscription support."""
     pass
 
 
 # Add commands from modules
-cli.add_command(connect)
-cli.add_command(disconnect)
-cli.add_command(status)
+cli.add_command(connection)  # Новая группа
 cli.add_command(server)
 cli.add_command(subscribe)
 cli.add_command(settings)
