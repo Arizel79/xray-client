@@ -78,7 +78,7 @@ class Settings(BaseModel):
     listen_http_port: int = 1081
 
     auto_update_subscriptions: bool = True
-    update_interval_hours: int = 24
+    update_interval_seconds: int = 120
     log_level: str = "warning"
 
     # Subscriptions headers
