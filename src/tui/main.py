@@ -8,9 +8,9 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import (
     Header, Footer, DataTable, Button, Label, Input,
-    TabbedContent, TabPane, RichLog, Static, Select
+    TabbedContent, TabPane, RichLog, Static
 )
-from textual import events, work
+from textual import work
 from textual.reactive import reactive
 from textual.message import Message
 from textual.worker import Worker, WorkerState
@@ -20,6 +20,9 @@ from src.core.process_manager import ProcessManager
 from src.core.subscription import SubscriptionManager
 from src.core.binary_manager import BinaryManager
 from src.core.config_generator import ConfigGenerator
+from src.parsers.base import BaseParser
+from src.parsers.vless import VLESSParser
+from src.parsers.vmess import VMessParser
 
 
 class ServerTable(DataTable):
@@ -33,6 +36,9 @@ class ServerTable(DataTable):
     def update_servers(self, servers: List[ServerConfig], statuses: dict):
         """Refresh table with server list and statuses."""
         self.clear()
+        if not servers:
+            self.add_row("", "No servers found", "", "", "")
+            return
         for server in servers:
             status = statuses.get(server.id, {}).get("running", False)
             status_text = "running" if status else "stopped"
@@ -108,6 +114,31 @@ class LogViewer(RichLog):
         self.write(logs)
 
 
+class AddServerModal(Static):
+    """Modal dialog for adding a server via link."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("Add server from link", classes="title")
+        yield Input(placeholder="vless://... or vmess://...", id="add-link")
+        with Horizontal():
+            yield Button("Add", id="add-confirm", variant="primary")
+            yield Button("Cancel", id="add-cancel", variant="default")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "add-cancel":
+            self.remove()
+        elif event.button.id == "add-confirm":
+            link = self.query_one("#add-link", Input).value
+            if link:
+                self.post_message(self.AddServer(link))
+            self.remove()
+
+    class AddServer(Message):
+        def __init__(self, link: str):
+            self.link = link
+            super().__init__()
+
+
 class XrayTUIApp(App):
     """Main TUI application for xray-client."""
 
@@ -151,6 +182,15 @@ class XrayTUIApp(App):
         margin: 1 0;
         padding: 1;
     }
+
+    AddServerModal {
+        background: $surface;
+        border: thick $primary;
+        padding: 2;
+        width: 60;
+        height: 12;
+        align: center middle;
+    }
     """
 
     def __init__(self):
@@ -175,6 +215,8 @@ class XrayTUIApp(App):
                     yield Button("Restart", id="restart", variant="warning")
                     yield Button("Logs", id="logs", variant="default")
                     yield Button("Remove", id="remove", variant="error")
+                    yield Button("Add", id="add-server", variant="primary")
+                    yield Button("Refresh", id="refresh", variant="primary")
                 yield ServerDetail(id="server-detail")
             with TabPane("Subscriptions", id="subscriptions"):
                 yield SubscriptionList(id="sub-list")
@@ -199,17 +241,20 @@ class XrayTUIApp(App):
 
     async def load_servers_and_subs(self):
         """Load servers and subscriptions from config (runs in thread)."""
-        config = await asyncio.to_thread(self.config_mgr.load)
-        self.servers = config.servers
-        self.subscriptions = config.subscriptions
-        # Update tables
-        self.update_server_table()
-        self.update_subscription_list()
+        try:
+            config = await asyncio.to_thread(self.config_mgr.load)
+            self.servers = config.servers
+            self.subscriptions = config.subscriptions
+            self.update_server_table()
+            self.update_subscription_list()
+        except Exception as e:
+            self.notify(f"Failed to load config: {e}", severity="error")
 
     def update_server_table(self):
         """Refresh server table with current statuses."""
         table = self.query_one("#server-table", ServerTable)
         table.update_servers(self.servers, self.statuses)
+        self.restore_selection()
 
     def update_subscription_list(self):
         """Refresh subscription list."""
@@ -220,9 +265,11 @@ class XrayTUIApp(App):
         """Fetch statuses for all servers."""
         statuses = {}
         for server in self.servers:
-            # Run blocking call in thread
-            status = await asyncio.to_thread(self.process_mgr.get_instance_status, server.id)
-            statuses[server.id] = status
+            try:
+                status = await asyncio.to_thread(self.process_mgr.get_instance_status, server.id)
+                statuses[server.id] = status
+            except Exception:
+                statuses[server.id] = {"running": False}
         self.statuses = statuses
         self.update_server_table()
 
@@ -231,13 +278,33 @@ class XrayTUIApp(App):
         table = event.data_table
         row_key = event.row_key
         row = table.get_row(row_key)
-        if row:
-            server_id = int(row[0])  # first column is ID
-            self.selected_server_id = server_id
-            server = next((s for s in self.servers if s.id == server_id), None)
-            if server:
-                detail = self.query_one("#server-detail", ServerDetail)
-                detail.set_server(server)
+        if row and len(row) > 0 and row[0] != "":
+            try:
+                server_id = int(row[0])
+                self.selected_server_id = server_id
+                server = next((s for s in self.servers if s.id == server_id), None)
+                if server:
+                    detail = self.query_one("#server-detail", ServerDetail)
+                    detail.set_server(server)
+            except ValueError:
+                pass
+
+    def restore_selection(self):
+        """Restore cursor to previously selected server if it still exists."""
+        if self.selected_server_id is None:
+            return
+        table = self.query_one("#server-table", ServerTable)
+        # Find row with matching ID
+        for row_key, row in table.rows.items():
+            cells = table.get_row(row_key)
+            if cells and cells[0] == str(self.selected_server_id):
+                table.move_cursor(row_key)
+                # Update detail view
+                server = next((s for s in self.servers if s.id == self.selected_server_id), None)
+                if server:
+                    detail = self.query_one("#server-detail", ServerDetail)
+                    detail.set_server(server)
+                break
 
     def get_selected_server(self) -> Optional[ServerConfig]:
         """Return currently selected server or None."""
@@ -257,7 +324,6 @@ class XrayTUIApp(App):
         settings = config.settings
         xray_path = await asyncio.to_thread(BinaryManager().ensure_binary)
 
-        # Generate config with default ports
         generator = ConfigGenerator(settings)
         xray_config = generator.generate_for_ports(
             server,
@@ -277,6 +343,8 @@ class XrayTUIApp(App):
                 http_port=settings.listen_http_port,
             )
             self.notify(f"Server {server.name} started", severity="information")
+            # Force immediate status update
+            self.call_later(self.update_statuses)
         except Exception as e:
             self.notify(f"Failed to start: {e}", severity="error")
 
@@ -289,6 +357,7 @@ class XrayTUIApp(App):
                 self.notify("Server stopped", severity="information")
             else:
                 self.notify("Server not running", severity="warning")
+            self.call_later(self.update_statuses)
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
@@ -301,6 +370,7 @@ class XrayTUIApp(App):
                 self.notify("Server restarted", severity="information")
             else:
                 self.notify("Failed to restart", severity="error")
+            self.call_later(self.update_statuses)
         except Exception as e:
             self.notify(f"Error: {e}", severity="error")
 
@@ -331,13 +401,16 @@ class XrayTUIApp(App):
                 self.notify("No server selected", severity="warning")
         elif button_id == "logs":
             if server:
-                # Switch to logs tab and load logs
                 self.query_one(TabbedContent).active = "logs-pane"
                 log_view = self.query_one("#log-viewer", LogViewer)
                 log_view.server_id = server.id
                 await log_view.refresh_logs(server.id, error=False)
             else:
                 self.notify("No server selected", severity="warning")
+        elif button_id == "refresh":
+            await self.load_servers_and_subs()
+        elif button_id == "add-server":
+            self.mount(AddServerModal())
         elif button_id == "log-refresh":
             log_view = self.query_one("#log-viewer", LogViewer)
             if log_view.server_id:
@@ -348,17 +421,14 @@ class XrayTUIApp(App):
                 await log_view.refresh_logs(log_view.server_id, error=True)
         # Subscription buttons
         elif button_id == "sub-add":
-            # For simplicity, we'll just notify; actual form would be more complex
-            self.notify("Add subscription (not implemented in demo)", severity="warning")
+            self.notify("Add subscription (not implemented)", severity="warning")
         elif button_id == "sub-update":
             await self.update_subscriptions()
         elif button_id == "sub-remove":
-            # Placeholder
             self.notify("Remove subscription (not implemented)", severity="warning")
 
     async def remove_server(self, server_id: int):
         """Remove server from config."""
-        # Check if running
         status = await asyncio.to_thread(self.process_mgr.get_instance_status, server_id)
         if status["running"]:
             self.notify("Stop server before removing", severity="error")
@@ -366,7 +436,6 @@ class XrayTUIApp(App):
         success = await asyncio.to_thread(self.config_mgr.remove_server, server_id)
         if success:
             self.notify("Server removed")
-            # Reload servers
             await self.load_servers_and_subs()
         else:
             self.notify("Failed to remove server", severity="error")
@@ -385,8 +454,26 @@ class XrayTUIApp(App):
                 self.notify(f"{sub.name} updated ({len(servers)} servers)")
             except Exception as e:
                 self.notify(f"Failed to update {sub.name}: {e}", severity="error")
-        # Reload servers
         await self.load_servers_and_subs()
+
+    async def on_add_server_modal_add_server(self, message: AddServerModal.AddServer):
+        """Handle adding a server from modal."""
+        link = message.link
+        try:
+            protocol = BaseParser.detect_protocol(link)
+            if protocol == "vless":
+                parser = VLESSParser()
+            elif protocol == "vmess":
+                parser = VMessParser()
+            else:
+                self.notify(f"Unsupported protocol: {protocol}", severity="error")
+                return
+            server = parser.parse(link)
+            await asyncio.to_thread(self.config_mgr.add_server, server)
+            self.notify(f"Added server: {server.name}")
+            await self.load_servers_and_subs()
+        except Exception as e:
+            self.notify(f"Failed to add server: {e}", severity="error")
 
 
 def main():

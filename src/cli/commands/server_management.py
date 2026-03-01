@@ -4,11 +4,8 @@ import sys
 
 import click
 
-from src.core.config import ConfigManager
-from src.core.process_manager import ProcessManager
-from src.parsers.base import BaseParser
-from src.parsers.vless import VLESSParser
-from src.parsers.vmess import VMessParser
+from src.services.xray_service import XrayService
+from src.utils.latency import test_multiple_servers_sync, test_server_sync
 
 
 @click.group()
@@ -20,24 +17,22 @@ def server():
 @server.command(name="list")
 @click.option(
     "-n",
-    "--no-subscrition-sorting",
+    "--no-subscription-sorting",
     is_flag=True,
-    help="Don`t group servers by subscription",
+    help="Don't group servers by subscription",
 )
-def server_list(no_subscrition_sorting):
+def server_list(no_subscription_sorting):
     """List all servers."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-        servers = config.servers
+        service = XrayService()
+        config = service.config_mgr.load()  # нужен доступ к subscriptions для группировки
+        servers = service.list_servers()
 
         if not servers:
             click.echo("No servers configured")
             sys.exit(0)
 
-        id_width = 3
-
-        if not no_subscrition_sorting:
+        if not no_subscription_sorting:
             subscriptions = {sub.name: sub.url for sub in config.subscriptions}
             grouped = {}
             standalone = []
@@ -55,25 +50,20 @@ def server_list(no_subscrition_sorting):
             for sub_name, sub_servers in grouped.items():
                 url = subscriptions.get(sub_name, "URL not found")
                 click.echo(f'Subscription "{sub_name}" ({url}):')
-
-                for idx, server in enumerate(sub_servers, start=1):
-                    marker = "  "
-                    click.echo(f"{marker}{server.in_list_str()}")
+                for server in sub_servers:
+                    click.echo(f"  {server.in_list_str()}")
                 click.echo()
 
             if standalone:
                 click.echo("Servers (without subscription):")
-                if standalone:
-                    for server in standalone:
-                        marker = "  "
-                        click.echo(f"{marker}{server.in_list_str()}")
+                for server in standalone:
+                    click.echo(f"  {server.in_list_str()}")
                 click.echo()
         else:
             servers.sort(key=lambda s: s.id)
-
             for server in servers:
-                marker = "  "
-                click.echo(f"{marker}{server.in_list_str()}")
+                click.echo(f"  {server.in_list_str()}")
+
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -85,30 +75,12 @@ def server_list(no_subscrition_sorting):
 def server_add(link: str, name: str | None):
     """Add a server from proxy link."""
     try:
-        protocol = BaseParser.detect_protocol(link)
-
-        if protocol == "vless":
-            parser = VLESSParser()
-        elif protocol == "vmess":
-            parser = VMessParser()
-        else:
-            click.echo(f"Error: Unsupported protocol: {protocol}")
-            sys.exit(1)
-
-        server = parser.parse(link)
-
-        # Override name if provided
-        if name:
-            server.name = name
-
-        config_mgr = ConfigManager()
-        config_mgr.add_server(server)
-
+        service = XrayService()
+        server = service.add_server_from_link(link, name)
         click.echo(f"Added server: {server.name}")
         click.echo(f"Protocol: {server.protocol}")
         click.echo(f"Address: {server.address}:{server.port}")
         click.echo(f"ID: {server.id}")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -117,24 +89,23 @@ def server_add(link: str, name: str | None):
 @server.command(name="remove")
 @click.argument("server_id", type=int)
 def server_remove(server_id: int):
+    """Remove a server by ID."""
     try:
-        config_mgr = ConfigManager()
-        process_mgr = ProcessManager()
-
-        server = config_mgr.get_server(server_id)
+        service = XrayService()
+        server = service.get_server(server_id)
         if not server:
             click.echo(f"Error: Server {server_id} not found")
             sys.exit(1)
 
-        # Проверяем, запущен ли сервер
-        status = process_mgr.get_instance_status(server_id)
-        if status["running"]:
-            click.echo("Error: Cannot remove a running server. Stop it first.")
-            sys.exit(1)
+        # Проверка на запущенный сервер уже внутри remove_server
+        if service.remove_server(server_id):
+            click.echo(f"Removed server: {server.name}")
+        else:
+            click.echo(f"Failed to remove server {server_id}")
 
-        config_mgr.remove_server(server.id)
-        click.echo(f"Removed server: {server.name}")
-
+    except RuntimeError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -146,14 +117,15 @@ def server_remove(server_id: int):
 def server_test(server_id: str | None, timeout: int):
     """Test server latency."""
     try:
-        config_mgr = ConfigManager()
-        from src.utils.latency import test_multiple_servers_sync, test_server_sync
+        service = XrayService()
 
         if server_id:
             # Test single server
-            server = config_mgr.get_server(server_id)
-            if not server:
-                server = config_mgr.find_server_by_name(server_id)
+            try:
+                sid = int(server_id)
+                server = service.get_server(sid)
+            except ValueError:
+                server = service.find_server_by_name(server_id)
 
             if not server:
                 click.echo(f"Error: Server '{server_id}' not found")
@@ -166,11 +138,8 @@ def server_test(server_id: str | None, timeout: int):
                 click.echo(f"Latency: {result['latency_ms']} ms")
             else:
                 click.echo("Connection timeout")
-
         else:
-            # Test all servers
-            servers = config_mgr.list_servers()
-
+            servers = service.list_servers()
             if not servers:
                 click.echo("No servers to test")
                 sys.exit(0)
@@ -178,7 +147,6 @@ def server_test(server_id: str | None, timeout: int):
             click.echo(f"Testing {len(servers)} servers...\n")
             results = test_multiple_servers_sync(servers, timeout=timeout)
 
-            # Sort by latency (put timeouts at the end)
             results.sort(
                 key=lambda r: r["latency_ms"] if r["latency_ms"] is not None else 999999
             )
@@ -186,7 +154,6 @@ def server_test(server_id: str | None, timeout: int):
             for result in results:
                 name = result["server_name"]
                 address = f"{result['address']}:{result['port']}"
-
                 if result["status"] == "ok":
                     latency = f"{result['latency_ms']} ms"
                     click.echo(f"{name:30} {address:25} {latency}")
@@ -203,17 +170,13 @@ def server_test(server_id: str | None, timeout: int):
 def server_show(server_id: str):
     """Show detailed server information."""
     try:
-        config_mgr = ConfigManager()
+        service = XrayService()
 
-        # Try to interpret as integer ID first
         try:
             sid = int(server_id)
-            server = config_mgr.get_server(sid)
+            server = service.get_server(sid)
         except ValueError:
-            server = None
-
-        if not server:
-            server = config_mgr.find_server_by_name(server_id)
+            server = service.find_server_by_name(server_id)
 
         if not server:
             click.echo(f"Error: Server '{server_id}' not found")

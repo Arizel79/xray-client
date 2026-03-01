@@ -4,7 +4,7 @@ import sys
 
 import click
 
-from src.core.config import ConfigManager
+from src.services.xray_service import XrayService
 
 
 @click.group()
@@ -23,14 +23,9 @@ def headers():
 def headers_enable():
     """Enable subscription headers."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-
-        config.settings.subscription_headers_enable = True
-        config_mgr.save(config)
-
+        service = XrayService()
+        service.set_subscription_headers_enabled(True)
         click.echo("Subscription headers enabled")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -40,14 +35,9 @@ def headers_enable():
 def headers_disable():
     """Disable subscription headers."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-
-        config.settings.subscription_headers_enable = False
-        config_mgr.save(config)
-
+        service = XrayService()
+        service.set_subscription_headers_enabled(False)
         click.echo("Subscription headers disabled")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -57,21 +47,20 @@ def headers_disable():
 def headers_status():
     """Show subscription headers status."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
+        service = XrayService()
+        settings = service.get_settings()
 
-        if config.settings.subscription_headers_enable:
+        if settings.subscription_headers_enable:
             click.echo("Subscription headers: enabled")
         else:
             click.echo("Subscription headers: disabled")
 
-        if config.settings.subscription_headers:
+        if settings.subscription_headers:
             click.echo("\nCurrent headers:")
-            for key, value in config.settings.subscription_headers.items():
+            for key, value in settings.subscription_headers.items():
                 click.echo(f"  {key}: {value}")
         else:
             click.echo("No headers configured")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -83,14 +72,9 @@ def headers_status():
 def headers_set(key: str, value: str):
     """Set a header key-value pair."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-
-        config.settings.subscription_headers[key] = value
-        config_mgr.save(config)
-
+        service = XrayService()
+        service.set_subscription_header(key, value)
         click.echo(f"Header set: {key}: {value}")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -101,16 +85,11 @@ def headers_set(key: str, value: str):
 def headers_unset(key: str):
     """Remove a header."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-
-        if key in config.settings.subscription_headers:
-            del config.settings.subscription_headers[key]
-            config_mgr.save(config)
+        service = XrayService()
+        if service.remove_subscription_header(key):
             click.echo(f"Header removed: {key}")
         else:
             click.echo(f"Header '{key}' not found")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -120,14 +99,9 @@ def headers_unset(key: str):
 def headers_clear():
     """Clear all headers."""
     try:
-        config_mgr = ConfigManager()
-        config = config_mgr.load()
-
-        config.settings.subscription_headers.clear()
-        config_mgr.save(config)
-
+        service = XrayService()
+        service.clear_subscription_headers()
         click.echo("All headers cleared")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)

@@ -4,8 +4,7 @@ import sys
 
 import click
 
-from src.core.config import ConfigManager, Subscription
-from src.core.subscription import SubscriptionManager
+from src.services.xray_service import XrayService
 from src.utils.helpers import format_timestamp, truncate_string
 
 
@@ -21,15 +20,11 @@ def subscribe():
 def subscribe_add(name: str, url: str):
     """Add a subscription."""
     try:
-        config_mgr = ConfigManager()
-
-        subscription = Subscription(name=name, url=url)
-        config_mgr.add_subscription(subscription)
-
+        service = XrayService()
+        service.add_subscription(name, url)
         click.echo(f"Added subscription: {name}")
         click.echo(f"URL: {truncate_string(url, 60)}")
         click.echo("\nRun 'subscribe update' to fetch servers")
-
     except ValueError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -43,48 +38,29 @@ def subscribe_add(name: str, url: str):
 def subscribe_update(name: str | None):
     """Update subscription(s)."""
     try:
-        config_mgr = ConfigManager()
-        sub_mgr = SubscriptionManager()
+        service = XrayService()
 
-        # Load config to get subscriptions headers
-        config = config_mgr.load()
-        headers_enable = config.settings.subscription_headers_enable
-        headers = config.settings.subscription_headers
-
-        # Get subscriptions to update
         if name:
-            subscription = config_mgr.get_subscription(name)
-            if not subscription:
+            sub = service.get_subscription(name)
+            if not sub:
                 click.echo(f"Error: Subscription '{name}' not found")
                 sys.exit(1)
-            subscriptions = [subscription]
+            click.echo(f"Updating subscription: {name}...")
+            servers = service.update_subscription(name)
+            click.echo(f"  Found {len(servers)} servers")
+            click.echo("  Updated successfully")
         else:
-            subscriptions = config_mgr.list_subscriptions()
+            subscriptions = service.list_subscriptions()
+            if not subscriptions:
+                click.echo("No subscriptions configured")
+                sys.exit(0)
 
-        if not subscriptions:
-            click.echo("No subscriptions configured")
-            sys.exit(0)
-
-        # Update each subscription
-        for sub in subscriptions:
-            click.echo(f"Updating subscription: {sub.name}...")
-
-            if headers_enable:
-                click.echo(f"  Using headers: {headers}")
-
-            try:
-                servers = sub_mgr.update_subscription(
-                    sub.url, headers=headers if headers_enable else None
-                )
-                click.echo(f"  Found {len(servers)} servers")
-
-                # Update config
-                config_mgr.update_subscription_servers(sub.name, servers)
-                click.echo(f"  Updated successfully")
-
-            except Exception as e:
-                click.echo(f"  Error: {e}", err=True)
-                continue
+            results = service.update_all_subscriptions()
+            for sub_name, count, error in results:
+                if error:
+                    click.echo(f"{sub_name}: Error - {error}", err=True)
+                else:
+                    click.echo(f"{sub_name}: Updated {count} servers")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -95,8 +71,8 @@ def subscribe_update(name: str | None):
 def subscribe_list():
     """List all subscriptions."""
     try:
-        config_mgr = ConfigManager()
-        subscriptions = config_mgr.list_subscriptions()
+        service = XrayService()
+        subscriptions = service.list_subscriptions()
 
         if not subscriptions:
             click.echo("No subscriptions configured")
@@ -124,18 +100,16 @@ def subscribe_list():
 def subscribe_remove(name: str, keep_servers: bool):
     """Remove a subscription."""
     try:
-        config_mgr = ConfigManager()
-
-        if not config_mgr.get_subscription(name):
+        service = XrayService()
+        if not service.get_subscription(name):
             click.echo(f"Error: Subscription '{name}' not found")
             sys.exit(1)
 
-        config_mgr.remove_subscription(name, remove_servers=not keep_servers)
+        service.remove_subscription(name, remove_servers=not keep_servers)
 
         click.echo(f"Removed subscription: {name}")
         if not keep_servers:
             click.echo("All servers from this subscription were also removed")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
