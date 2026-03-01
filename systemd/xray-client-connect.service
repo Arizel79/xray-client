@@ -1,0 +1,17 @@
+[Unit]
+Description=Xray client connection to server 
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+User=user  # change user and group
+Group=user
+WorkingDirectory=/home/user/xray-client  # change working directory
+ExecStart=/home/user/.local/bin/uv run xray-client connection start 1 --socks-port 5050 --listen-host 127.0.0.1
+Restart=on-failure
+RestartSec=10
+Environment="PATH=/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=multi-user.target
