@@ -54,7 +54,7 @@ def server_list(no_subscrition_sorting):
                 for idx, server in enumerate(sub_servers, start=1):
                     marker =  "  "
                     click.echo(
-                        f"{marker}{server.id:{id_width}}. {server.name:30} {server.protocol:8} {server.address}:{server.port}"
+                        f"{marker}{server.in_list_str()}"
                     )
                 click.echo()
 
@@ -64,7 +64,7 @@ def server_list(no_subscrition_sorting):
                     for server in standalone:
                         marker = "  "
                         click.echo(
-                            f"{marker}{server.id:{id_width}}. {server.name:30} {server.protocol:8} {server.address}:{server.port}"
+                            f"{marker}{server.in_list_str()}"
                         )
                 click.echo()
         else:
@@ -73,7 +73,7 @@ def server_list(no_subscrition_sorting):
             for server in servers:
                 marker = "  "
                 click.echo(
-                    f"{marker}{server.id:{id_width}}. {server.name:30} {server.protocol:8} {server.address}:{server.port}"
+                    f"{marker}{server.in_list_str()}"
                 )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

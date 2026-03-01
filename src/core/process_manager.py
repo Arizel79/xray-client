@@ -154,6 +154,7 @@ class ProcessManager:
             if "process" in locals():
                 process.kill()
             raise RuntimeError(f"Failed to start xray instance: {e}")
+
     def restart_instance(self, server_id: int, timeout: int = 5) -> bool:
         """Restart a running instance for a specific server.
 
@@ -163,20 +164,16 @@ class ProcessManager:
         from src.core.binary_manager import BinaryManager
         from src.core.config_generator import ConfigGenerator
 
-        # Получаем текущую информацию об инстансе (до остановки)
         status = self.get_instance_status(server_id)
         if not status["running"]:
             return False
 
-        # Получаем конфигурацию сервера
         config_mgr = ConfigManager()
         server = config_mgr.get_server(server_id)
         if not server:
             raise RuntimeError(f"Server {server_id} not found in config")
 
-        # Останавливаем инстанс
         if not self.stop_instance(server_id, timeout):
-            # Если остановка не удалась, пробуем принудительно убить процесс по PID из статуса
             if status["pid"]:
                 try:
                     proc = psutil.Process(status["pid"])
@@ -186,7 +183,6 @@ class ProcessManager:
                     print(f"Force kill failed for PID {status['pid']}: {e}")
                     return False
 
-        # Генерируем новый конфиг с теми же параметрами прослушивания
         config_gen = ConfigGenerator(config_mgr.load().settings)
         xray_config = config_gen.generate_for_ports(
             server,
@@ -195,7 +191,6 @@ class ProcessManager:
             http_port=status["http_port"]
         )
 
-        # Запускаем новый инстанс
         binary_mgr = BinaryManager()
         xray_path = binary_mgr.ensure_binary()
         try:

@@ -157,30 +157,38 @@ def connection_status(server_id: int | None):
     """Show status of connections."""
     try:
         process_mgr = ProcessManager()
+        config_mgr = ConfigManager()
 
-        if server_id is not None:
-            # Status for specific server
-            status = process_mgr.get_instance_status(server_id)
-
+        def print_server(server, status):
             if status["running"]:
-                click.echo(f"Server {server_id}: ✅ RUNNING")
+                click.echo(f"{server}: running")
                 click.echo(f"  PID: {status['pid']}")
                 click.echo(f"  Uptime: {format_uptime(status['uptime'])}")
                 click.echo(f"  Memory: {status['memory_mb']} MB")
                 click.echo(f"  CPU: {status['cpu_percent']}%")
-                click.echo(f"  Listen host: {status['listen_host']}")
-                
+
                 if status['socks_port']:
-                    click.echo(f"  SOCKS5: {status['listen_host']}:{status['socks_port']}")
+                    click.echo(f"  SOCKS5 proxy: {status['listen_host']}:{status['socks_port']}")
                 else:
-                    click.echo(f"  SOCKS5: disabled")
-                    
+                    click.echo(f"  SOCKS5 proxy: disabled")
+
                 if status['http_port']:
-                    click.echo(f"  HTTP: {status['listen_host']}:{status['http_port']}")
+                    click.echo(f"  HTTP proxy: {status['listen_host']}:{status['http_port']}")
                 else:
-                    click.echo(f"  HTTP: disabled")
+                    click.echo(f"  HTTP proxy: disabled")
             else:
-                click.echo(f"Server {server_id}: ❌ STOPPED")
+                click.echo(f"{server}: stopped")
+
+        if server_id is not None:
+            # Status for specific server
+            server = config_mgr.get_server(server_id)
+            if not server:
+                click.echo(f"Error: Server {server_id} not found")
+                sys.exit(1)
+
+            status = process_mgr.get_instance_status(server_id)
+            print_server(server, status)
+            
 
         else:
             # List all running instances
@@ -193,21 +201,14 @@ def connection_status(server_id: int | None):
             click.echo(f"Running connections: {len(instances)}\n")
 
             for inst in instances:
-                click.echo(f"Server {inst['server_id']}:")
-                click.echo(f"  PID: {inst['pid']}")
-                click.echo(f"  Uptime: {format_uptime(inst['uptime'])}")
-                click.echo(f"  Listen: {inst['listen_host']}")
+                server = config_mgr.get_server(inst['server_id'])
+                status = process_mgr.get_instance_status(server.id)
                 
-                if inst['socks_port']:
-                    click.echo(f"  SOCKS5: {inst['listen_host']}:{inst['socks_port']}")
-                if inst['http_port']:
-                    click.echo(f"  HTTP: {inst['listen_host']}:{inst['http_port']}")
-                click.echo()
+                print_server(server, status)
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
-
 
 @connection.command(name="list")
 def connection_list():

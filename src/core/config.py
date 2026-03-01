@@ -42,8 +42,12 @@ class ServerConfig(BaseModel):
     alter_id: Optional[int] = None
 
     def __str__(self) -> str:
-        """String representation of server."""
-        return f"{self.name} ({self.protocol}://{self.address}:{self.port})"
+        """Return string like '1. Server Name'."""
+        return f"{self.id}. {self.name}"
+
+    def in_list_str(self, id_width: int = 5, name_width: int = 30) -> str:
+        """Return formatted string for server listing."""
+        return f"{self.id:{id_width}}. {self.name:<{name_width}} {self.protocol:8} {self.address}:{self.port}"
 
 class RunningInstance(BaseModel):
     """Модель запущенного экземпляра Xray"""
