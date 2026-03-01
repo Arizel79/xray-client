@@ -4,7 +4,7 @@ from click_shell import shell
 
 from src.cli.main import cli as main_cli
 
-@shell(prompt='xray> ', intro='XRAY Client Interactive Shell. Type "exit" to quit.')
+@shell(prompt='xray> ', intro='XRAY Client Interactive Shell. Type "quit" to exit.')
 def interactive_shell():
     pass
 

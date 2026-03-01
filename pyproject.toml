@@ -10,11 +10,13 @@ dependencies = [
     "psutil>=6.1.1",
     "pydantic>=2.10.6",
     "click-shell>=2.1",
+    "loguru>=0.7.3",
 ]
 
 [project.scripts]
 xray-client = "src.cli.main:cli"
 xray-client-cmd = "src.cli.interactive:interactive_shell"
+xray-client-autoupdater = "src.auto_updater.main:main"
 
 [build-system]
 requires = ["hatchling"]
