@@ -13,6 +13,23 @@ class ServerMixin:
     def list_servers(self) -> List[ServerConfig]:
         return self.config_mgr.list_servers()
 
+    def get_servers_grouped_by_subscription(self) -> Dict[str, Any]:
+        """Return servers grouped by subscription name and standalone list."""
+        config = self.config_mgr.load()
+        subscriptions = {sub.name for sub in config.subscriptions}
+        grouped = {sub: [] for sub in subscriptions}
+        standalone = []
+        for server in config.servers:
+            if server.subscription:
+                grouped.setdefault(server.subscription, []).append(server)
+            else:
+                standalone.append(server)
+
+        for sub in grouped:
+            grouped[sub].sort(key=lambda s: s.name.lower())
+        standalone.sort(key=lambda s: s.name.lower())
+        return {"grouped": grouped, "standalone": standalone}
+
     def get_server(self, server_id: int) -> Optional[ServerConfig]:
         return self.config_mgr.get_server(server_id)
 
@@ -90,6 +107,19 @@ class ServerMixin:
     def get_server_logs(self, server_id: int, lines: int = 50, error: bool = False) -> str:
         return self.process_mgr.get_instance_logs(server_id, lines, error)
 
+    def test_server_latency(self, server_id: int, timeout: float = 5.0) -> Dict[str, Any]:
+        """Синхронно тестирует задержку до указанного сервера."""
+        server = self.get_server(server_id)
+        if not server:
+            raise ValueError(f"Server {server_id} not found")
+        # Запускаем асинхронную функцию и возвращаем результат
+        return asyncio.run(async_test_server(server, timeout))
+
+    def test_all_servers_latency(self, timeout: float = 5.0) -> List[Dict[str, Any]]:
+        """Синхронно тестирует задержки до всех серверов."""
+        servers = self.list_servers()
+        return asyncio.run(async_test_servers(servers, timeout))
+
 
 class SubscriptionMixin:
     """Mixin for subscription-related operations."""
@@ -140,7 +170,33 @@ class ProcessMixin:
 
     def stop_all_servers(self, timeout: int = 5) -> int:
         return self.process_mgr.stop_all(timeout)
+    def check_ports_availability(self, host: str, socks_port: Optional[int], http_port: Optional[int]) -> List[str]:
+        """Check if given ports are available on host. Return list of occupied ports."""
+        occupied = []
+        for port in [socks_port, http_port]:
+            if port is None:
+                continue
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind((host, port))
+                except socket.error:
+                    occupied.append(str(port))
+        return occupied
 
+    def restart_servers_by_subscription(self, subscription_name: str) -> int:
+        """Restart all running servers belonging to a subscription. Returns number of restarted servers."""
+        running = self.process_mgr.list_running_instances()
+        restarted = 0
+        for inst in running:
+            server = self.config_mgr.get_server(inst["server_id"])
+            if server and server.subscription == subscription_name:
+                try:
+                    self.process_mgr.restart_instance(inst["server_id"])
+                    restarted += 1
+                except Exception as e:
+                    # Логирование ошибки (можно заменить на logger если есть)
+                    print(f"Failed to restart server {inst['server_id']}: {e}")
+        return restarted
 
 class SettingsMixin:
     """Mixin for settings management."""

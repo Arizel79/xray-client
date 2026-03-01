@@ -12,6 +12,7 @@ from src.core.config import ConfigManager
 from src.core.process_manager import ProcessManager
 from src.core.subscription import SubscriptionManager
 
+from src.services.xray_service import XrayService
 
 class SubscriptionUpdater:
     def __init__(self, check_config_interval=60, polling_interval=20):
@@ -141,41 +142,15 @@ class SubscriptionUpdater:
             logger.error(f"Failed to update {sub.name}: {e}")
 
     def _restart_instances_for_subscription(self, subscription_name: str, config):
-        running_instances = self.process_mgr.list_running_instances()
-        if not running_instances:
-            logger.debug(
-                f"No running instances, no restart needed for subscription {subscription_name}"
-            )
-            return
-
-        to_restart = []
-        for inst in running_instances:
-            server = self.config_mgr.get_server(inst["server_id"])
-            if server and server.subscription == subscription_name:
-                to_restart.append(inst["server_id"])
-
-        if not to_restart:
-            logger.debug(
-                f"No running servers belong to subscription {subscription_name}"
-            )
-            return
-
-        logger.info(
-            f"Subscription {subscription_name} updated, restarting {len(to_restart)} running server(s)"
-        )
-        for server_id in to_restart:
-            try:
-                logger.info(f"Restarting server {server_id}")
-                self.process_mgr.restart_instance(server_id)
-                logger.success(f"Server {server_id} restarted successfully")
-            except Exception as e:
-                logger.error(f"Failed to restart server {server_id}: {e}")
-
-    def stop(self):
-        if not self.shutdown_requested:
-            logger.info("Stopping updater...")
-        self.running = False
-        self.shutdown_requested = True
+        service = XrayService()
+        count = service.restart_servers_by_subscription(subscription_name)
+        if count > 0:
+            logger.info(f"Restarted {count} server(s) for subscription {subscription_name}")
+        def stop(self):
+            if not self.shutdown_requested:
+                logger.info("Stopping updater...")
+            self.running = False
+            self.shutdown_requested = True
 
 
 def main():

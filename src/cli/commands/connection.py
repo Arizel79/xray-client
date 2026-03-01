@@ -9,16 +9,6 @@ from src.services.xray_service import XrayService
 from src.utils.helpers import format_uptime
 
 
-def is_port_available(port: int, host: str = "127.0.0.1") -> bool:
-    """Check if a port is available."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind((host, port))
-            return True
-        except socket.error:
-            return False
-
-
 @click.group()
 def connection():
     """Manage connections to servers."""
@@ -78,16 +68,15 @@ def connection_start(
 
         # Check port availability
         if not force:
-            if use_socks and not is_port_available(socks_port, listen_host):
-                click.echo(
-                    f"Error: SOCKS5 port {socks_port} on {listen_host} is already in use"
-                )
+            occupied = service.check_ports_availability(
+                listen_host,
+                socks_port if use_socks else None,
+                http_port if use_http else None
+            )
+            if occupied:
+                click.echo(f"Error: Port(s) {', '.join(occupied)} on {listen_host} are already in use")
                 sys.exit(1)
-            if use_http and not is_port_available(http_port, listen_host):
-                click.echo(
-                    f"Error: HTTP port {http_port} on {listen_host} is already in use"
-                )
-                sys.exit(1)
+
 
         # Start instance
         click.echo(f"Starting connection to {server.name}...")

@@ -13,7 +13,6 @@ def server():
     """Manage servers."""
     pass
 
-
 @server.command(name="list")
 @click.option(
     "-n",
@@ -22,33 +21,23 @@ def server():
     help="Don't group servers by subscription",
 )
 def server_list(no_subscription_sorting):
-    """List all servers."""
     try:
         service = XrayService()
-        config = service.config_mgr.load()  # нужен доступ к subscriptions для группировки
         servers = service.list_servers()
-
         if not servers:
             click.echo("No servers configured")
             sys.exit(0)
 
         if not no_subscription_sorting:
-            subscriptions = {sub.name: sub.url for sub in config.subscriptions}
-            grouped = {}
-            standalone = []
+            grouped_data = service.get_servers_grouped_by_subscription()
+            grouped = grouped_data["grouped"]
+            standalone = grouped_data["standalone"]
 
-            for server in servers:
-                if server.subscription:
-                    grouped.setdefault(server.subscription, []).append(server)
-                else:
-                    standalone.append(server)
-
-            for sub_name in grouped:
-                grouped[sub_name].sort(key=lambda s: s.name.lower())
-            standalone.sort(key=lambda s: s.name.lower())
+            # Получаем URL подписок для отображения
+            subs = {sub.name: sub.url for sub in service.list_subscriptions()}
 
             for sub_name, sub_servers in grouped.items():
-                url = subscriptions.get(sub_name, "URL not found")
+                url = subs.get(sub_name, "URL not found")
                 click.echo(f'Subscription "{sub_name}" ({url}):')
                 for server in sub_servers:
                     click.echo(f"  {server.in_list_str()}")
@@ -63,7 +52,6 @@ def server_list(no_subscription_sorting):
             servers.sort(key=lambda s: s.id)
             for server in servers:
                 click.echo(f"  {server.in_list_str()}")
-
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -132,7 +120,7 @@ def server_test(server_id: str | None, timeout: int):
                 sys.exit(1)
 
             click.echo(f"Testing {server.name}...")
-            result = test_server_sync(server, timeout=timeout)
+            result = service.test_server_latency(server.id, timeout)
 
             if result["status"] == "ok":
                 click.echo(f"Latency: {result['latency_ms']} ms")
@@ -145,7 +133,8 @@ def server_test(server_id: str | None, timeout: int):
                 sys.exit(0)
 
             click.echo(f"Testing {len(servers)} servers...\n")
-            results = test_multiple_servers_sync(servers, timeout=timeout)
+            
+            results = service.test_all_servers_latency(timeout)
 
             results.sort(
                 key=lambda r: r["latency_ms"] if r["latency_ms"] is not None else 999999
