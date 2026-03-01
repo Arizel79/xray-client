@@ -184,14 +184,20 @@ def server_show(server_id: str):
     try:
         config_mgr = ConfigManager()
 
-        server = config_mgr.get_server(server_id)
+        # Try to interpret as integer ID first
+        try:
+            sid = int(server_id)
+            server = config_mgr.get_server(sid)
+        except ValueError:
+            server = None
+
         if not server:
             server = config_mgr.find_server_by_name(server_id)
 
         if not server:
             click.echo(f"Error: Server '{server_id}' not found")
             sys.exit(1)
-
+            
         click.echo(f"Name: {server.name}")
         click.echo(f"ID: {server.id}")
         click.echo(f"Protocol: {server.protocol}")

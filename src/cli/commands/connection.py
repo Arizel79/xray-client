@@ -265,25 +265,3 @@ def connection_stop_all():
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
-
-
-# Keep old commands for backward compatibility
-@click.command()
-def connect():
-    """Legacy: Use 'connection start' instead."""
-    click.echo("This command is deprecated. Use 'connection start <server_id>' instead.")
-    sys.exit(1)
-
-
-@click.command()
-def disconnect():
-    """Legacy: Use 'connection stop' instead."""
-    click.echo("This command is deprecated. Use 'connection stop <server_id>' instead.")
-    sys.exit(1)
-
-
-@click.command()
-def status():
-    """Legacy: Use 'connection status' instead."""
-    click.echo("This command is deprecated. Use 'connection status [server_id]' instead.")
-    sys.exit(1)

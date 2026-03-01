@@ -302,30 +302,28 @@ class ConfigManager:
     def update_subscription_servers(
         self, subscription_name: str, servers: List[ServerConfig]
     ) -> None:
-        """Update servers for a subscription.
-
-        Removes old servers from this subscription and adds new ones.
-
-        Args:
-            subscription_name: Name of subscription
-            servers: New servers to add
-        """
         config = self.load()
 
-        # Remove old servers from this subscription
+        # Удаляем старые серверы этой подписки
         config.servers = [
             s for s in config.servers if s.subscription != subscription_name
         ]
 
-        # Add new servers
+        # Добавляем новые серверы
         for server in servers:
+            # Важно: привязываем сервер к подписке
+            server.subscription = subscription_name
+
+            # Присваиваем новый ID
             if config.servers:
                 max_id = max(s.id for s in config.servers)
                 server.id = max_id + 1
             else:
                 server.id = 1
 
-        # Update subscription last_update
+            config.servers.append(server)
+
+        # Обновляем время последнего обновления подписки
         for sub in config.subscriptions:
             if sub.name == subscription_name:
                 sub.last_update = datetime.utcnow().isoformat()
