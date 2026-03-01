@@ -168,11 +168,11 @@ class ConfigManager:
         config.servers.append(server)
         self.save(config)
         
-    def remove_server(self, server_id: str) -> bool:
+    def remove_server(self, server_id: int) -> bool:  # Изменено с str на int
         """Remove a server from configuration.
-
+        
         Args:
-            server_id: ID of server to remove
+            server_id: ID of server to remove (int)
 
         Returns:
             True if server was removed, False if not found
@@ -184,7 +184,7 @@ class ConfigManager:
 
         if len(config.servers) < original_count:
             # If removed server was current, clear current_server
-            if config.current_server == server_id:
+            if config.current_server == str(server_id):  # Сравниваем как строки, потому что current_server хранится как str?
                 config.current_server = None
 
             self.save(config)
@@ -192,11 +192,11 @@ class ConfigManager:
 
         return False
 
-    def get_server(self, server_id: str) -> Optional[ServerConfig]:
+    def get_server(self, server_id: int) -> Optional[ServerConfig]:  # Изменено с str на int
         """Get server by ID.
-
+        
         Args:
-            server_id: Server ID
+            server_id: Server ID (int)
 
         Returns:
             Server configuration or None if not found
@@ -206,7 +206,7 @@ class ConfigManager:
             if server.id == server_id:
                 return server
         return None
-
+        
     def find_server_by_name(self, name: str) -> Optional[ServerConfig]:
         """Find server by name (case-insensitive).
 
@@ -333,26 +333,26 @@ class ConfigManager:
 
         self.save(config)
 
-    def set_current_server(self, server_id: Optional[str]) -> None:
+    def set_current_server(self, server_id: Optional[int]) -> None:  # Изменено
         """Set current active server.
-
+        
         Args:
             server_id: Server ID or None to clear
         """
         config = self.load()
-        config.current_server = server_id
+        config.current_server = str(server_id) if server_id is not None else None  # Храним как строку для совместимости
         self.save(config)
 
     def get_current_server(self) -> Optional[ServerConfig]:
         """Get current active server.
-
+        
         Returns:
             Current server configuration or None
         """
         config = self.load()
         if config.current_server:
             try:
-                server_id = int(config.current_server)
+                server_id = int(config.current_server)  # Преобразуем строку в int
                 return self.get_server(server_id)
             except ValueError:
                 return None

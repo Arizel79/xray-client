@@ -90,29 +90,24 @@ def server_add(link: str, name: str | None):
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
-
 @server.command(name="remove")
-@click.argument("server_id")
-def server_remove(server_id: str):
+@click.argument("server_id", type=int)  # Указываем тип int
+def server_remove(server_id: int):  # Параметр теперь int
     """Remove a server by ID."""
     try:
         config_mgr = ConfigManager()
 
         # Get server info before removing
-        server = config_mgr.get_server(server_id)
+        server = config_mgr.get_server(server_id)  # Передаем int
         if not server:
-            server = config_mgr.find_server_by_name(server_id)
-            
-        if not server:
-            click.echo(f"Error: Server '{server_id}' not found")
+            # Попытка найти по имени, если передано не число? Но теперь тип int, так что это не нужно.
+            click.echo(f"Error: Server {server_id} not found")
             sys.exit(1)
 
         # Check if currently connected
         current = config_mgr.get_current_server()
-        if current and current.id == server.id:
-            click.echo(
-                "Error: Cannot remove currently connected server. Disconnect first."
-            )
+        if current and current.id == server_id:
+            click.echo("Error: Cannot remove currently connected server. Disconnect first.")
             sys.exit(1)
 
         # Remove server

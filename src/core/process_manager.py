@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 import psutil
 
-from src.core.config import RunningInstance
+from src.core.config import RunningInstance, ConfigManager 
 
 
 class ProcessManager:
