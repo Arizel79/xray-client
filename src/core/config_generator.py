@@ -343,21 +343,3 @@ class ConfigGenerator:
             })
         
         return inbounds
-    def _generate_inbounds_for_ports(self, socks_port: int, http_port: int) -> list:
-        """Generate inbound configurations with custom ports."""
-        return [
-            {
-                "port": socks_port,
-                "listen": self.settings.listen_host,
-                "protocol": "socks",
-                "settings": {"udp": True, "auth": "noauth"},
-                "tag": "socks-in",
-            },
-            {
-                "port": http_port,
-                "listen": self.settings.listen_host,
-                "protocol": "http",
-                "settings": {},
-                "tag": "http-in",
-            },
-        ]

@@ -90,7 +90,6 @@ class Config(BaseModel):
     """Main configuration model."""
 
     version: str = "1.0"
-    current_server: Optional[str] = None
     servers: List[ServerConfig] = Field(default_factory=list)
     subscriptions: List[Subscription] = Field(default_factory=list)
     settings: Settings = Field(default_factory=Settings)
@@ -168,28 +167,13 @@ class ConfigManager:
         config.servers.append(server)
         self.save(config)
         
-    def remove_server(self, server_id: int) -> bool:  # Изменено с str на int
-        """Remove a server from configuration.
-        
-        Args:
-            server_id: ID of server to remove (int)
-
-        Returns:
-            True if server was removed, False if not found
-        """
+    def remove_server(self, server_id: int) -> bool:
         config = self.load()
         original_count = len(config.servers)
-
         config.servers = [s for s in config.servers if s.id != server_id]
-
         if len(config.servers) < original_count:
-            # If removed server was current, clear current_server
-            if config.current_server == str(server_id):  # Сравниваем как строки, потому что current_server хранится как str?
-                config.current_server = None
-
             self.save(config)
             return True
-
         return False
 
     def get_server(self, server_id: int) -> Optional[ServerConfig]:  # Изменено с str на int

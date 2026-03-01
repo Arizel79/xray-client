@@ -4,6 +4,7 @@ import click
 import sys
 
 from src.core.config import ConfigManager
+from src.core.process_manager import ProcessManager
 from src.parsers.base import BaseParser
 from src.parsers.vless import VLESSParser
 from src.parsers.vmess import VMessParser
@@ -16,45 +17,67 @@ def server():
 
 
 @server.command(name="list")
-@click.option(
-    "--sort-by", type=click.Choice(["name", "protocol", "subscription"]), default="name"
-)
-def server_list(sort_by: str):
+@click.option("-n", "--no-subscrition-sorting", is_flag=True, help="Don`t group servers by subscription")
+def server_list(no_subscrition_sorting):
     """List all servers."""
     try:
         config_mgr = ConfigManager()
-        servers = config_mgr.list_servers()
+        config = config_mgr.load()
+        servers = config.servers
 
         if not servers:
             click.echo("No servers configured")
             sys.exit(0)
 
-        # Sort servers
-        if sort_by == "name":
-            servers.sort(key=lambda s: s.name.lower())
-        elif sort_by == "protocol":
-            servers.sort(key=lambda s: s.protocol)
-        elif sort_by == "subscription":
-            servers.sort(key=lambda s: s.subscription or "")
 
-        current = config_mgr.get_current_server()
-        current_id = current.id if current else None
+        id_width = 3
 
-        click.echo(f"Total servers: {len(servers)}\n")
+        if not no_subscrition_sorting:
+            subscriptions = {sub.name: sub.url for sub in config.subscriptions}
+            grouped = {}
+            standalone = []
 
-        for server in servers:
-            marker = "* " if server.id == current_id else "  "
-            sub_info = f" [{server.subscription}]" if server.subscription else ""
-            click.echo(
-                f"{marker}{server.name:30} {server.protocol:8} "
-                f"{server.address}:{server.port}{sub_info}"
-            )
-            click.echo(f"   ID: {server.id}")
+            for server in servers:
+                if server.subscription:
+                    grouped.setdefault(server.subscription, []).append(server)
+                else:
+                    standalone.append(server)
 
+            for sub_name in grouped:
+                grouped[sub_name].sort(key=lambda s: s.name.lower())
+            standalone.sort(key=lambda s: s.name.lower())
+
+            for sub_name, sub_servers in grouped.items():
+                url = subscriptions.get(sub_name, "URL not found")
+                click.echo(f'Subscription "{sub_name}" ({url}):')
+
+                for idx, server in enumerate(sub_servers, start=1):
+                    marker =  "  "
+                    click.echo(
+                        f"{marker}{server.id:{id_width}}. {server.name:30} {server.protocol:8} {server.address}:{server.port}"
+                    )
+                click.echo()
+
+            if standalone:
+                click.echo("Servers (without subscription):")
+                if standalone:
+                    for server in standalone:
+                        marker = "  "
+                        click.echo(
+                            f"{marker}{server.id:{id_width}}. {server.name:30} {server.protocol:8} {server.address}:{server.port}"
+                        )
+                click.echo()
+        else:
+            servers.sort(key=lambda s: s.id)
+            
+            for server in servers:
+                marker = "  "
+                click.echo(
+                    f"{marker}{server.id:{id_width}}. {server.name:30} {server.protocol:8} {server.address}:{server.port}"
+                )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
-
 
 @server.command(name="add")
 @click.argument("link")
@@ -90,27 +113,25 @@ def server_add(link: str, name: str | None):
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
+
 @server.command(name="remove")
-@click.argument("server_id", type=int)  # Указываем тип int
-def server_remove(server_id: int):  # Параметр теперь int
-    """Remove a server by ID."""
+@click.argument("server_id", type=int)
+def server_remove(server_id: int):
     try:
         config_mgr = ConfigManager()
+        process_mgr = ProcessManager()
 
-        # Get server info before removing
-        server = config_mgr.get_server(server_id)  # Передаем int
+        server = config_mgr.get_server(server_id)
         if not server:
-            # Попытка найти по имени, если передано не число? Но теперь тип int, так что это не нужно.
             click.echo(f"Error: Server {server_id} not found")
             sys.exit(1)
 
-        # Check if currently connected
-        current = config_mgr.get_current_server()
-        if current and current.id == server_id:
-            click.echo("Error: Cannot remove currently connected server. Disconnect first.")
+        # Проверяем, запущен ли сервер
+        status = process_mgr.get_instance_status(server_id)
+        if status["running"]:
+            click.echo("Error: Cannot remove a running server. Stop it first.")
             sys.exit(1)
 
-        # Remove server
         config_mgr.remove_server(server.id)
         click.echo(f"Removed server: {server.name}")
 
@@ -197,13 +218,13 @@ def server_show(server_id: str):
         if not server:
             click.echo(f"Error: Server '{server_id}' not found")
             sys.exit(1)
-            
+
         click.echo(f"Name: {server.name}")
         click.echo(f"ID: {server.id}")
         click.echo(f"Protocol: {server.protocol}")
         click.echo(f"Address: {server.address}:{server.port}")
         click.echo(f"UUID: {server.uuid}")
-        
+
         if server.alter_id is not None:
             click.echo(f"Alter ID: {server.alter_id}")
         if server.flow:
