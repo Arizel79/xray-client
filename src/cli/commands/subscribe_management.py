@@ -1,7 +1,8 @@
 """Subscription management commands for xray-client CLI."""
 
-import click
 import sys
+
+import click
 
 from src.core.config import ConfigManager, Subscription
 from src.core.subscription import SubscriptionManager
@@ -44,7 +45,7 @@ def subscribe_update(name: str | None):
     try:
         config_mgr = ConfigManager()
         sub_mgr = SubscriptionManager()
-        
+
         # Load config to get subscriptions headers
         config = config_mgr.load()
         headers_enable = config.settings.subscription_headers_enable
@@ -67,14 +68,13 @@ def subscribe_update(name: str | None):
         # Update each subscription
         for sub in subscriptions:
             click.echo(f"Updating subscription: {sub.name}...")
-            
+
             if headers_enable:
                 click.echo(f"  Using headers: {headers}")
 
             try:
                 servers = sub_mgr.update_subscription(
-                    sub.url, 
-                    headers=headers if headers_enable else None
+                    sub.url, headers=headers if headers_enable else None
                 )
                 click.echo(f"  Found {len(servers)} servers")
 

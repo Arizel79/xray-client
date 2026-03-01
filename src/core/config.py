@@ -37,7 +37,6 @@ class ServerConfig(BaseModel):
     subscription: Optional[str] = None  # Name of subscription this server belongs to
     added_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
-
     # VMess specific
     alter_id: Optional[int] = None
 
@@ -49,17 +48,20 @@ class ServerConfig(BaseModel):
         """Return formatted string for server listing."""
         return f"{self.id:{id_width}}. {self.name:<{name_width}} {self.protocol:8} {self.address}:{self.port}"
 
+
 class RunningInstance(BaseModel):
     """Модель запущенного экземпляра Xray"""
+
     instance_id: str
     server_id: int
     pid: int
     start_time: str
     config_path: str
     listen_host: str = "127.0.0.1"
-    listen_socks_port: Optional[int] = None 
-    listen_http_port: Optional[int] = None 
+    listen_socks_port: Optional[int] = None
+    listen_http_port: Optional[int] = None
     status: str = "running"  # 'running', 'stopped', 'error'
+
 
 class Subscription(BaseModel):
     """Subscription configuration model."""
@@ -153,10 +155,12 @@ class ConfigManager:
         except Exception as e:
             temp_file.unlink(missing_ok=True)
             raise RuntimeError(f"Failed to save config: {e}")
+
     def get_servers_by_subscription(self, sub_name: str) -> List[ServerConfig]:
         """Get all servers belonging to a subscription."""
         config = self.load()
         return [s for s in config.servers if s.subscription == sub_name]
+
     def add_server(self, server: ServerConfig) -> None:
         """Add a server to configuration.
 
@@ -175,7 +179,7 @@ class ConfigManager:
 
         config.servers.append(server)
         self.save(config)
-        
+
     def remove_server(self, server_id: int) -> bool:
         config = self.load()
         original_count = len(config.servers)
@@ -185,9 +189,11 @@ class ConfigManager:
             return True
         return False
 
-    def get_server(self, server_id: int) -> Optional[ServerConfig]:  # Изменено с str на int
+    def get_server(
+        self, server_id: int
+    ) -> Optional[ServerConfig]:  # Изменено с str на int
         """Get server by ID.
-        
+
         Args:
             server_id: Server ID (int)
 
@@ -199,7 +205,7 @@ class ConfigManager:
             if server.id == server_id:
                 return server
         return None
-        
+
     def find_server_by_name(self, name: str) -> Optional[ServerConfig]:
         """Find server by name (case-insensitive).
 
@@ -326,17 +332,19 @@ class ConfigManager:
 
     def set_current_server(self, server_id: Optional[int]) -> None:  # Изменено
         """Set current active server.
-        
+
         Args:
             server_id: Server ID or None to clear
         """
         config = self.load()
-        config.current_server = str(server_id) if server_id is not None else None  # Храним как строку для совместимости
+        config.current_server = (
+            str(server_id) if server_id is not None else None
+        )  # Храним как строку для совместимости
         self.save(config)
 
     def get_current_server(self) -> Optional[ServerConfig]:
         """Get current active server.
-        
+
         Returns:
             Current server configuration or None
         """

@@ -2,12 +2,8 @@
 
 import click
 
-from src.cli.commands import (
-    connection,  # Новая группа команд
-    server,
-    subscribe,
-    settings
-)
+from src.cli.commands import connection  # Новая группа команд
+from src.cli.commands import server, settings, subscribe
 
 
 @click.group()

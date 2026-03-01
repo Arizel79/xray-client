@@ -1,7 +1,8 @@
 """Server management commands for xray-client CLI."""
 
-import click
 import sys
+
+import click
 
 from src.core.config import ConfigManager
 from src.core.process_manager import ProcessManager
@@ -17,7 +18,12 @@ def server():
 
 
 @server.command(name="list")
-@click.option("-n", "--no-subscrition-sorting", is_flag=True, help="Don`t group servers by subscription")
+@click.option(
+    "-n",
+    "--no-subscrition-sorting",
+    is_flag=True,
+    help="Don`t group servers by subscription",
+)
 def server_list(no_subscrition_sorting):
     """List all servers."""
     try:
@@ -28,7 +34,6 @@ def server_list(no_subscrition_sorting):
         if not servers:
             click.echo("No servers configured")
             sys.exit(0)
-
 
         id_width = 3
 
@@ -52,10 +57,8 @@ def server_list(no_subscrition_sorting):
                 click.echo(f'Subscription "{sub_name}" ({url}):')
 
                 for idx, server in enumerate(sub_servers, start=1):
-                    marker =  "  "
-                    click.echo(
-                        f"{marker}{server.in_list_str()}"
-                    )
+                    marker = "  "
+                    click.echo(f"{marker}{server.in_list_str()}")
                 click.echo()
 
             if standalone:
@@ -63,21 +66,18 @@ def server_list(no_subscrition_sorting):
                 if standalone:
                     for server in standalone:
                         marker = "  "
-                        click.echo(
-                            f"{marker}{server.in_list_str()}"
-                        )
+                        click.echo(f"{marker}{server.in_list_str()}")
                 click.echo()
         else:
             servers.sort(key=lambda s: s.id)
-            
+
             for server in servers:
                 marker = "  "
-                click.echo(
-                    f"{marker}{server.in_list_str()}"
-                )
+                click.echo(f"{marker}{server.in_list_str()}")
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
 
 @server.command(name="add")
 @click.argument("link")

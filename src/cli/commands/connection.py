@@ -1,7 +1,7 @@
 """Connection commands for xray-client CLI."""
 
-import sys
 import socket
+import sys
 
 import click
 
@@ -27,6 +27,7 @@ def connection():
     """Manage connections to servers."""
     pass
 
+
 @connection.command(name="start")
 @click.argument("server_id", type=int)
 @click.option("--listen-host", default="127.0.0.1", help="Host to listen on")
@@ -34,11 +35,11 @@ def connection():
 @click.option("--http-port", type=int, help="HTTP port (omit to disable HTTP)")
 @click.option("--force", is_flag=True, help="Force start even if port is in use")
 def connection_start(
-    server_id: int, 
-    listen_host: str, 
-    socks_port: int | None, 
-    http_port: int | None, 
-    force: bool
+    server_id: int,
+    listen_host: str,
+    socks_port: int | None,
+    http_port: int | None,
+    force: bool,
 ):
     """Start connection to a specific server."""
     try:
@@ -55,7 +56,9 @@ def connection_start(
         # Check if this server is already running
         status = process_mgr.get_instance_status(server_id)
         if status["running"]:
-            click.echo(f"Error: Server {server_id} is already running (PID: {status['pid']})")
+            click.echo(
+                f"Error: Server {server_id} is already running (PID: {status['pid']})"
+            )
             sys.exit(1)
 
         # Load config for settings (используем как значения по умолчанию)
@@ -64,7 +67,7 @@ def connection_start(
         # Определяем какие прокси включать
         use_socks = socks_port is not None
         use_http = http_port is not None
-        
+
         # Если оба порта не указаны, используем оба по умолчанию
         if not use_socks and not use_http:
             use_socks = True
@@ -81,10 +84,14 @@ def connection_start(
         # Проверяем доступность портов (только для включенных прокси)
         if not force:
             if use_socks and not is_port_available(socks_port, listen_host):
-                click.echo(f"Error: SOCKS5 port {socks_port} on {listen_host} is already in use")
+                click.echo(
+                    f"Error: SOCKS5 port {socks_port} on {listen_host} is already in use"
+                )
                 sys.exit(1)
             if use_http and not is_port_available(http_port, listen_host):
-                click.echo(f"Error: HTTP port {http_port} on {listen_host} is already in use")
+                click.echo(
+                    f"Error: HTTP port {http_port} on {listen_host} is already in use"
+                )
                 sys.exit(1)
 
         # Ensure binary is available
@@ -94,26 +101,26 @@ def connection_start(
         # Generate config with custom settings
         config_gen = ConfigGenerator(config.settings)
         xray_config = config_gen.generate_for_ports(
-            server, 
+            server,
             listen_host=listen_host,
             socks_port=socks_port if use_socks else None,
-            http_port=http_port if use_http else None
+            http_port=http_port if use_http else None,
         )
 
         # Start instance
         click.echo(f"Starting connection to {server.name}...")
         instance_id = process_mgr.start_instance(
-            server_id, 
-            xray_path, 
+            server_id,
+            xray_path,
             xray_config,
             listen_host=listen_host,
             socks_port=socks_port if use_socks else None,
-            http_port=http_port if use_http else None
+            http_port=http_port if use_http else None,
         )
 
         click.echo(f"✅ Connected to {server.name}")
         click.echo(f"   Instance ID: {instance_id}")
-        
+
         # Показываем только включенные прокси
         if use_socks:
             click.echo(f"   SOCKS5: {listen_host}:{socks_port}")
@@ -121,12 +128,13 @@ def connection_start(
             click.echo(f"   HTTP: {listen_host}:{http_port}")
         if not use_socks and not use_http:
             click.echo(f"   ⚠️  No proxies enabled (SOCKS5 and HTTP are disabled)")
-            
+
         click.echo(f"   PID: {process_mgr.get_instance_status(server_id)['pid']}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
 
 @connection.command(name="stop")
 @click.argument("server_id", type=int)
@@ -151,6 +159,7 @@ def connection_stop(server_id: int):
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
+
 @connection.command(name="status")
 @click.argument("server_id", type=int, required=False)
 def connection_status(server_id: int | None):
@@ -167,13 +176,17 @@ def connection_status(server_id: int | None):
                 click.echo(f"  Memory: {status['memory_mb']} MB")
                 click.echo(f"  CPU: {status['cpu_percent']}%")
 
-                if status['socks_port']:
-                    click.echo(f"  SOCKS5 proxy: {status['listen_host']}:{status['socks_port']}")
+                if status["socks_port"]:
+                    click.echo(
+                        f"  SOCKS5 proxy: {status['listen_host']}:{status['socks_port']}"
+                    )
                 else:
                     click.echo(f"  SOCKS5 proxy: disabled")
 
-                if status['http_port']:
-                    click.echo(f"  HTTP proxy: {status['listen_host']}:{status['http_port']}")
+                if status["http_port"]:
+                    click.echo(
+                        f"  HTTP proxy: {status['listen_host']}:{status['http_port']}"
+                    )
                 else:
                     click.echo(f"  HTTP proxy: disabled")
             else:
@@ -188,7 +201,6 @@ def connection_status(server_id: int | None):
 
             status = process_mgr.get_instance_status(server_id)
             print_server(server, status)
-            
 
         else:
             # List all running instances
@@ -201,14 +213,15 @@ def connection_status(server_id: int | None):
             click.echo(f"Running connections: {len(instances)}\n")
 
             for inst in instances:
-                server = config_mgr.get_server(inst['server_id'])
+                server = config_mgr.get_server(inst["server_id"])
                 status = process_mgr.get_instance_status(server.id)
-                
+
                 print_server(server, status)
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
 
 @connection.command(name="list")
 def connection_list():

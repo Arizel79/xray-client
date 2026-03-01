@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 import sys
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
+
 from src.core.config import ConfigManager
-from src.core.subscription import SubscriptionManager
 from src.core.process_manager import ProcessManager
+from src.core.subscription import SubscriptionManager
 
 
 class SubscriptionUpdater:
@@ -23,7 +24,12 @@ class SubscriptionUpdater:
         self.polling_interval = polling_interval
 
         logger.remove()
-        logger.add(sys.stdout, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}", level="DEBUG", colorize=True)
+        logger.add(
+            sys.stdout,
+            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | {message}",
+            level="DEBUG",
+            colorize=True,
+        )
 
         logger.info("XRAY Client subscription updater initialized")
 
@@ -65,10 +71,14 @@ class SubscriptionUpdater:
                             should_update = True
                             logger.info(f"First update for {sub.name}")
                         else:
-                            seconds_since = (now - last_update_time[sub.name]).total_seconds()
+                            seconds_since = (
+                                now - last_update_time[sub.name]
+                            ).total_seconds()
                             if seconds_since >= update_interval:
                                 should_update = True
-                                logger.info(f"Scheduled update for {sub.name} ({seconds_since:.0f}s since last update)")
+                                logger.info(
+                                    f"Scheduled update for {sub.name} ({seconds_since:.0f}s since last update)"
+                                )
                         if should_update:
                             self._update_subscription(sub, config)
                             last_update_time[sub.name] = now
@@ -88,7 +98,11 @@ class SubscriptionUpdater:
 
     def _update_subscription(self, sub, config):
         try:
-            headers = config.settings.subscription_headers if config.settings.subscription_headers_enable else None
+            headers = (
+                config.settings.subscription_headers
+                if config.settings.subscription_headers_enable
+                else None
+            )
             logger.info(f"Updating {sub.name}")
             logger.debug(f"URL: {sub.url}.")
 
@@ -119,7 +133,9 @@ class SubscriptionUpdater:
             if config.settings.restart_xray_on_autoupdate:
                 self._restart_instances_for_subscription(sub.name, config)
             else:
-                logger.info("Restart on autoupdate is disabled, running instances not restarted")
+                logger.info(
+                    "Restart on autoupdate is disabled, running instances not restarted"
+                )
 
         except Exception as e:
             logger.error(f"Failed to update {sub.name}: {e}")
@@ -127,20 +143,26 @@ class SubscriptionUpdater:
     def _restart_instances_for_subscription(self, subscription_name: str, config):
         running_instances = self.process_mgr.list_running_instances()
         if not running_instances:
-            logger.debug(f"No running instances, no restart needed for subscription {subscription_name}")
+            logger.debug(
+                f"No running instances, no restart needed for subscription {subscription_name}"
+            )
             return
 
         to_restart = []
         for inst in running_instances:
-            server = self.config_mgr.get_server(inst['server_id'])
+            server = self.config_mgr.get_server(inst["server_id"])
             if server and server.subscription == subscription_name:
-                to_restart.append(inst['server_id'])
+                to_restart.append(inst["server_id"])
 
         if not to_restart:
-            logger.debug(f"No running servers belong to subscription {subscription_name}")
+            logger.debug(
+                f"No running servers belong to subscription {subscription_name}"
+            )
             return
 
-        logger.info(f"Subscription {subscription_name} updated, restarting {len(to_restart)} running server(s)")
+        logger.info(
+            f"Subscription {subscription_name} updated, restarting {len(to_restart)} running server(s)"
+        )
         for server_id in to_restart:
             try:
                 logger.info(f"Restarting server {server_id}")
@@ -160,8 +182,12 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Xray-Client Subscription Updater")
-    parser.add_argument("--once", action="store_true", help="Run once and exit (don't loop)")
-    parser.add_argument("--force", action="store_true", help="Force update all subscriptions now")
+    parser.add_argument(
+        "--once", action="store_true", help="Run once and exit (don't loop)"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Force update all subscriptions now"
+    )
 
     args = parser.parse_args()
 
@@ -197,7 +223,9 @@ def main():
                 if hours_since >= config.settings.update_interval_seconds / 3600:
                     updater._update_subscription(sub, config)
                 else:
-                    logger.info(f"{sub.name} was updated {hours_since:.1f}h ago, skipping")
+                    logger.info(
+                        f"{sub.name} was updated {hours_since:.1f}h ago, skipping"
+                    )
         logger.info("Done")
         return
 

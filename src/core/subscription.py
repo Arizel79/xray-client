@@ -1,7 +1,7 @@
 """Subscription management for fetching and parsing server lists."""
 
 import base64
-from typing import List, Dict
+from typing import Dict, List
 
 import httpx
 
@@ -21,8 +21,9 @@ class SubscriptionManager:
             "vmess": VMessParser(),
         }
 
-    def fetch_subscription(self, url: str, timeout: int = 30, 
-        headers: Optional[Dict[str, str]] = None) -> str:
+    def fetch_subscription(
+        self, url: str, timeout: int = 30, headers: Optional[Dict[str, str]] = None
+    ) -> str:
         """Fetch subscription content from URL.
 
         Args:
@@ -113,7 +114,9 @@ class SubscriptionManager:
 
         return servers
 
-    def update_subscription(self, url: str, headers: Optional[Dict[str, str]] = None) -> List[ServerConfig]:
+    def update_subscription(
+        self, url: str, headers: Optional[Dict[str, str]] = None
+    ) -> List[ServerConfig]:
         """Fetch and parse a subscription.
 
         Args:

@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 import psutil
 
-from src.core.config import RunningInstance, ConfigManager 
+from src.core.config import ConfigManager, RunningInstance
 
 
 class ProcessManager:
@@ -31,10 +31,7 @@ class ProcessManager:
 
     def _save_instances(self, instances: Dict[str, RunningInstance]) -> None:
         """Save running instances information."""
-        data = {
-            inst_id: inst.model_dump()
-            for inst_id, inst in instances.items()
-        }
+        data = {inst_id: inst.model_dump() for inst_id, inst in instances.items()}
         with open(self.instances_file, "w") as f:
             json.dump(data, f, indent=2)
 
@@ -188,7 +185,7 @@ class ProcessManager:
             server,
             listen_host=status["listen_host"],
             socks_port=status["socks_port"],
-            http_port=status["http_port"]
+            http_port=status["http_port"],
         )
 
         binary_mgr = BinaryManager()
@@ -200,7 +197,7 @@ class ProcessManager:
                 xray_config,
                 listen_host=status["listen_host"],
                 socks_port=status["socks_port"],
-                http_port=status["http_port"]
+                http_port=status["http_port"],
             )
             return True
         except RuntimeError as e:
@@ -316,9 +313,13 @@ class ProcessManager:
                     # Формируем информацию о прокси
                     proxies = []
                     if inst.listen_socks_port:
-                        proxies.append(f"SOCKS5: {inst.listen_host}:{inst.listen_socks_port}")
+                        proxies.append(
+                            f"SOCKS5: {inst.listen_host}:{inst.listen_socks_port}"
+                        )
                     if inst.listen_http_port:
-                        proxies.append(f"HTTP: {inst.listen_host}:{inst.listen_http_port}")
+                        proxies.append(
+                            f"HTTP: {inst.listen_host}:{inst.listen_http_port}"
+                        )
 
                     return {
                         "running": True,
@@ -329,7 +330,9 @@ class ProcessManager:
                         "listen_host": inst.listen_host,
                         "socks_port": inst.listen_socks_port,
                         "http_port": inst.listen_http_port,
-                        "proxies": ", ".join(proxies) if proxies else "No proxies enabled",
+                        "proxies": (
+                            ", ".join(proxies) if proxies else "No proxies enabled"
+                        ),
                         "instance_id": inst.instance_id,
                     }
 
@@ -368,16 +371,18 @@ class ProcessManager:
             try:
                 process = psutil.Process(inst.pid)
 
-                result.append({
-                    "instance_id": inst_id,
-                    "server_id": inst.server_id,
-                    "pid": inst.pid,
-                    "uptime": int(time.time() - process.create_time()),
-                    "listen_host": inst.listen_host,
-                    "socks_port": inst.listen_socks_port,
-                    "http_port": inst.listen_http_port,
-                    "status": "running",
-                })
+                result.append(
+                    {
+                        "instance_id": inst_id,
+                        "server_id": inst.server_id,
+                        "pid": inst.pid,
+                        "uptime": int(time.time() - process.create_time()),
+                        "listen_host": inst.listen_host,
+                        "socks_port": inst.listen_socks_port,
+                        "http_port": inst.listen_http_port,
+                        "status": "running",
+                    }
+                )
             except psutil.NoSuchProcess:
                 # Stale record
                 inst.status = "stopped"
@@ -386,7 +391,10 @@ class ProcessManager:
                 continue
 
         return result
-    def get_instance_logs(self, server_id: int, lines: int = 50, error: bool = False) -> str:
+
+    def get_instance_logs(
+        self, server_id: int, lines: int = 50, error: bool = False
+    ) -> str:
         """Get logs for a specific instance.
 
         Args:
@@ -397,7 +405,11 @@ class ProcessManager:
         Returns:
             Log content
         """
-        log_file = self.instances_dir / str(server_id) / ("xray_error.log" if error else "xray.log")
+        log_file = (
+            self.instances_dir
+            / str(server_id)
+            / ("xray_error.log" if error else "xray.log")
+        )
 
         if not log_file.exists():
             return ""
