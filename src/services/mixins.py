@@ -8,6 +8,7 @@ from src.parsers.vmess import VMessParser
 
 import socket
 
+from loguru import logger
 
 class ServerMixin:
     """Mixin for server-related operations."""
@@ -78,9 +79,15 @@ class ServerMixin:
         settings = config.settings
 
         listen_host = listen_host or settings.listen_host
-        socks_port = socks_port if socks_port is not None else settings.listen_socks_port
-        http_port = http_port if http_port is not None else settings.listen_http_port
+        socks_port = socks_port
+        http_port = http_port 
 
+        if listen_host is None:
+            raise ValueError(f"No host set")
+        if socks_port is None and http_port is None:
+            raise ValueError(f"No socks or/and http port set")
+
+        logger.info(f"Starting server {server} on {listen_host}, socks proxy port: {socks_port}, http proxy port: {http_port}")
         xray_path = self.binary_mgr.ensure_binary()
         generator = ConfigGenerator(settings)
         xray_config = generator.generate_for_ports(
@@ -172,17 +179,26 @@ class ProcessMixin:
 
     def stop_all_servers(self, timeout: int = 5) -> int:
         return self.process_mgr.stop_all(timeout)
+
     def check_ports_availability(self, host: str, socks_port: Optional[int], http_port: Optional[int]) -> List[str]:
         """Check if given ports are available on host. Return list of occupied ports."""
+        logger.debug("Checking ports availability: {port}")
         occupied = []
         for port in [socks_port, http_port]:
             if port is None:
                 continue
+            host_port = f"{host}:{port}"
+            logger.info(f"Checking port availability: {host_port}")
+            logger.debug(f"opening socket on {host_port}")
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 try:
                     s.bind((host, port))
+                    logger.info(f"Port {host_port} available")
                 except socket.error:
+                    logger.debug(f"Port open failed: {e}")
+                    logger.warning(f"Port {host_port} not available")
                     occupied.append(str(port))
+            logger.debug(f"socket closed")
         return occupied
 
     def restart_servers_by_subscription(self, subscription_name: str) -> int:
@@ -197,7 +213,7 @@ class ProcessMixin:
                     restarted += 1
                 except Exception as e:
                     # Логирование ошибки (можно заменить на logger если есть)
-                    print(f"Failed to restart server {inst['server_id']}: {e}")
+                    logger.error(f"Failed to restart server {inst['server_id']}: {e}")
         return restarted
 
 class SettingsMixin:

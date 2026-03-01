@@ -87,19 +87,14 @@ def connection_start(
             http_port=http_port if use_http else None,
         )
 
-        click.echo(f"✅ Connected to {server.name}")
-        click.echo(f"   Instance ID: {instance_id}")
+        new_status = service.get_server_status(server_id)
+
+        click.echo(f"Connected to {server.name}")
 
         if use_socks:
             click.echo(f"   SOCKS5: {listen_host}:{socks_port}")
         if use_http:
             click.echo(f"   HTTP: {listen_host}:{http_port}")
-        if not use_socks and not use_http:
-            click.echo("   ⚠️  No proxies enabled (SOCKS5 and HTTP are disabled)")
-
-        # Get updated status to show PID
-        new_status = service.get_server_status(server_id)
-        click.echo(f"   PID: {new_status['pid']}")
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -120,7 +115,7 @@ def connection_stop(server_id: int):
 
         click.echo(f"Stopping connection to server {server_id}...")
         if service.stop_server(server_id):
-            click.echo(f"✅ Stopped connection to server {server_id}")
+            click.echo(f"   Stopped connection to server {server_id}")
         else:
             click.echo(f"Failed to stop server {server_id}")
 

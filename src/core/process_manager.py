@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import psutil
-
 from loguru import logger
 
 from src.core.config import ConfigManager, RunningInstance
@@ -31,26 +30,36 @@ class ProcessManager:
         self.log_dir = self.base_dir / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
+        logger.debug(f"ProcessManager initialized with base_dir: {self.base_dir}")
+        logger.trace(f"Instances dir: {self.instances_dir}")
+        logger.trace(f"Instances file: {self.instances_file}")
+        logger.trace(f"Log dir: {self.log_dir}")
+
     def _save_instances(self, instances: Dict[str, RunningInstance]) -> None:
         """Save running instances information."""
         data = {inst_id: inst.model_dump() for inst_id, inst in instances.items()}
         with open(self.instances_file, "w") as f:
             json.dump(data, f, indent=2)
+        logger.trace(f"Saved {len(instances)} instance(s) to {self.instances_file}")
 
     def _load_instances(self) -> Dict[str, RunningInstance]:
         """Load running instances information."""
         if not self.instances_file.exists():
+            logger.trace("No instances file found, returning empty dict")
             return {}
 
         try:
             with open(self.instances_file, "r") as f:
                 data = json.load(f)
 
-            return {
+            instances = {
                 inst_id: RunningInstance(**inst_data)
                 for inst_id, inst_data in data.items()
             }
-        except Exception:
+            logger.trace(f"Loaded {len(instances)} instance(s) from {self.instances_file}")
+            return instances
+        except Exception as e:
+            logger.warning(f"Failed to load instances file: {e}")
             return {}
 
     def start_instance(
@@ -78,6 +87,9 @@ class ProcessManager:
         Raises:
             RuntimeError: If start fails or instance already running
         """
+        logger.info(f"Starting xray instance for server {server_id} with binary {xray_binary}")
+        logger.debug(f"Listen: {listen_host}, SOCKS: {socks_port}, HTTP: {http_port}")
+
         # Check if this server is already running
         instances = self._load_instances()
         for inst in instances.values():
@@ -86,24 +98,29 @@ class ProcessManager:
                 try:
                     process = psutil.Process(inst.pid)
                     if process.is_running():
+                        logger.error(f"Server {server_id} is already running (PID: {inst.pid})")
                         raise RuntimeError(
                             f"Server {server_id} is already running (PID: {inst.pid})"
                         )
                     else:
                         # Stale record
+                        logger.warning(f"Found stale record for server {server_id} (PID: {inst.pid}) - marking as stopped")
                         inst.status = "stopped"
                 except psutil.NoSuchProcess:
                     # Stale record
+                    logger.warning(f"Found stale record for server {server_id} (PID: {inst.pid}) - marking as stopped")
                     inst.status = "stopped"
 
         # Create instance directory
         instance_dir = self.instances_dir / str(server_id)
         instance_dir.mkdir(exist_ok=True)
+        logger.trace(f"Instance directory: {instance_dir}")
 
         # Write config file
         config_file = instance_dir / "config.json"
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
+        logger.debug(f"Config written to {config_file}")
 
         # Log files for this instance
         log_file = instance_dir / "xray.log"
@@ -111,6 +128,7 @@ class ProcessManager:
 
         # Start process
         try:
+            logger.info(f"Starting xray process for server {server_id}...")
             with open(log_file, "a") as out, open(error_log, "a") as err:
                 process = subprocess.Popen(
                     [str(xray_binary), "run", "-c", str(config_file)],
@@ -118,6 +136,7 @@ class ProcessManager:
                     stderr=err,
                     start_new_session=True,
                 )
+            logger.debug(f"Process started with PID: {process.pid}")
 
             # Wait a bit and check if process started successfully
             time.sleep(0.5)
@@ -127,6 +146,7 @@ class ProcessManager:
                 # Process died immediately, read error log
                 with open(error_log, "r") as f:
                     error = f.read()[-500:]  # Last 500 chars
+                logger.error(f"Xray process died immediately with error: {error}")
                 raise RuntimeError(f"Xray failed to start. Error: {error}")
 
             # Create instance record
@@ -146,12 +166,15 @@ class ProcessManager:
             instances[instance_id] = instance
             self._save_instances(instances)
 
+            logger.success(f"Xray instance {instance_id} started successfully")
             return instance_id
 
         except Exception as e:
             # Clean up if something went wrong
             if "process" in locals():
+                logger.warning(f"Killing process due to start failure")
                 process.kill()
+            logger.error(f"Failed to start xray instance: {e}")
             raise RuntimeError(f"Failed to start xray instance: {e}")
 
     def restart_instance(self, server_id: int, timeout: int = 5) -> bool:
@@ -160,26 +183,30 @@ class ProcessManager:
         Returns:
             True if restarted successfully.
         """
+        logger.info(f"Restarting instance for server {server_id} with timeout {timeout}s")
         from src.core.binary_manager import BinaryManager
         from src.core.config_generator import ConfigGenerator
 
         status = self.get_instance_status(server_id)
         if not status["running"]:
+            logger.warning(f"Server {server_id} is not running, cannot restart")
             return False
 
         config_mgr = ConfigManager()
         server = config_mgr.get_server(server_id)
         if not server:
+            logger.error(f"Server {server_id} not found in config")
             raise RuntimeError(f"Server {server_id} not found in config")
 
         if not self.stop_instance(server_id, timeout):
             if status["pid"]:
                 try:
+                    logger.warning(f"Graceful stop failed, force killing PID {status['pid']}")
                     proc = psutil.Process(status["pid"])
                     proc.kill()
                     proc.wait(timeout=2)
                 except Exception as e:
-                    print(f"Force kill failed for PID {status['pid']}: {e}")
+                    logger.error(f"Force kill failed for PID {status['pid']}: {e}")
                     return False
 
         config_gen = ConfigGenerator(config_mgr.load().settings)
@@ -201,9 +228,10 @@ class ProcessManager:
                 socks_port=status["socks_port"],
                 http_port=status["http_port"],
             )
+            logger.success(f"Restarted instance for server {server_id}")
             return True
         except RuntimeError as e:
-            print(f"Failed to start new instance after restart: {e}")
+            logger.error(f"Failed to start new instance after restart: {e}")
             return False
 
     def stop_instance(self, server_id: int, timeout: int = 5) -> bool:
@@ -212,6 +240,7 @@ class ProcessManager:
         Returns:
             True if at least one instance was successfully stopped (or marked as stopped).
         """
+        logger.info(f"Stopping instance for server {server_id} with timeout {timeout}s")
         instances = self._load_instances()
         stopped = False
 
@@ -221,35 +250,45 @@ class ProcessManager:
             if inst.server_id == server_id and inst.status == "running"
         ]
 
+        if not to_stop:
+            logger.info(f"No running instance found for server {server_id}")
+            return False
+
         for inst_id, inst in to_stop:
             try:
                 process = psutil.Process(inst.pid)
+                logger.debug(f"Terminating process {inst.pid} for instance {inst_id}")
                 process.terminate()
-                logger.info(f"Terminating process: {inst.pid}")
                 try:
                     process.wait(timeout=timeout)
-                    logger.info(f"Process terminated: {inst.pid}")
+                    logger.debug(f"Process {inst.pid} terminated gracefully")
                 except psutil.TimeoutExpired:
-                    logger.info(f"Process terminating timed out ({timeout}s), killing")
+                    logger.warning(f"Process {inst.pid} did not terminate within {timeout}s, killing")
                     process.kill()
-                    # После kill ждём немного, но если не умер – продолжаем, процесс будет помечен как stopped
-                    kill_timeout  =2 
+                    kill_timeout = 2
                     try:
                         process.wait(timeout=kill_timeout)
+                        logger.debug(f"Process {inst.pid} killed")
                     except psutil.TimeoutExpired:
-                        logger.info(f"Process killing timed out ({kill_timeout}s), nothing doing")
-                        # Даже если не умер, считаем, что запись недействительна
-                        pass
+                        logger.warning(f"Process {inst.pid} kill timed out after {kill_timeout}s")
                 inst.status = "stopped"
                 stopped = True
+                logger.debug(f"Instance {inst_id} marked as stopped")
             except psutil.NoSuchProcess:
+                logger.debug(f"Process {inst.pid} no longer exists, marking instance {inst_id} as stopped")
                 inst.status = "stopped"
                 stopped = True
             except Exception as e:
                 logger.error(f"Error stopping instance {inst_id}: {e}")
+                # Still mark as stopped to clean up record
                 inst.status = "stopped"
                 stopped = True
 
+        
+        if stopped:
+            logger.success(f"Stopped instance(s) for server {server_id}")
+        else:
+            logger.warning(f"No instance was stopped for server {server_id}")
         self._save_instances(instances)
         return stopped
 
@@ -262,6 +301,7 @@ class ProcessManager:
         Returns:
             Number of instances stopped
         """
+        logger.info(f"Stopping all xray instances with timeout {timeout}s")
         instances = self._load_instances()
         stopped_count = 0
 
@@ -271,24 +311,31 @@ class ProcessManager:
 
             try:
                 process = psutil.Process(inst.pid)
+                logger.debug(f"Terminating process {inst.pid} for instance {inst_id}")
                 process.terminate()
 
                 try:
                     process.wait(timeout=timeout)
+                    logger.debug(f"Process {inst.pid} terminated gracefully")
                 except psutil.TimeoutExpired:
+                    logger.warning(f"Process {inst.pid} did not terminate within {timeout}s, killing")
                     process.kill()
                     process.wait(timeout=2)
 
                 inst.status = "stopped"
                 stopped_count += 1
+                logger.debug(f"Instance {inst_id} stopped")
 
             except psutil.NoSuchProcess:
+                logger.debug(f"Process {inst.pid} no longer exists, marking instance {inst_id} as stopped")
                 inst.status = "stopped"
                 stopped_count += 1
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error stopping instance {inst_id}: {e}")
                 continue
 
         self._save_instances(instances)
+        logger.success(f"Stopped {stopped_count} xray instance(s)")
         return stopped_count
 
     def get_instance_status(self, server_id: int) -> dict:
@@ -300,6 +347,7 @@ class ProcessManager:
         Returns:
             Dictionary with status info
         """
+        logger.debug(f"Getting status for server {server_id}")
         instances = self._load_instances()
 
         for inst in instances.values():
@@ -327,7 +375,7 @@ class ProcessManager:
                             f"HTTP: {inst.listen_host}:{inst.listen_http_port}"
                         )
 
-                    return {
+                    status_info = {
                         "running": True,
                         "pid": inst.pid,
                         "uptime": uptime_seconds,
@@ -341,13 +389,20 @@ class ProcessManager:
                         ),
                         "instance_id": inst.instance_id,
                     }
+                    logger.trace(f"Status for server {server_id}: {status_info}")
+                    return status_info
 
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
                     # Process is dead, update status
+                    logger.debug(f"Process {inst.pid} is dead (error: {e}), marking instance as stopped")
                     inst.status = "stopped"
                     self._save_instances(instances)
                     break
+                except Exception as e:
+                    logger.error(f"Unexpected error while getting status for server {server_id}: {e}")
+                    break
 
+        logger.debug(f"Server {server_id} is not running")
         return {
             "running": False,
             "pid": None,
@@ -367,6 +422,7 @@ class ProcessManager:
         Returns:
             List of dictionaries with instance info
         """
+        logger.debug("Listing all running instances")
         instances = self._load_instances()
         result = []
 
@@ -377,25 +433,29 @@ class ProcessManager:
             try:
                 process = psutil.Process(inst.pid)
 
-                result.append(
-                    {
-                        "instance_id": inst_id,
-                        "server_id": inst.server_id,
-                        "pid": inst.pid,
-                        "uptime": int(time.time() - process.create_time()),
-                        "listen_host": inst.listen_host,
-                        "socks_port": inst.listen_socks_port,
-                        "http_port": inst.listen_http_port,
-                        "status": "running",
-                    }
-                )
+                info = {
+                    "instance_id": inst_id,
+                    "server_id": inst.server_id,
+                    "pid": inst.pid,
+                    "uptime": int(time.time() - process.create_time()),
+                    "listen_host": inst.listen_host,
+                    "socks_port": inst.listen_socks_port,
+                    "http_port": inst.listen_http_port,
+                    "status": "running",
+                }
+                result.append(info)
+                logger.trace(f"Found running instance: {info}")
+
             except psutil.NoSuchProcess:
                 # Stale record
+                logger.debug(f"Stale record for {inst_id} (PID {inst.pid}) removed")
                 inst.status = "stopped"
                 self._save_instances(instances)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error checking instance {inst_id}: {e}")
                 continue
 
+        logger.debug(f"Found {len(result)} running instance(s)")
         return result
 
     def get_instance_logs(
@@ -411,6 +471,8 @@ class ProcessManager:
         Returns:
             Log content
         """
+        log_type = "error" if error else "standard"
+        logger.debug(f"Getting {log_type} logs for server {server_id}, last {lines} lines")
         log_file = (
             self.instances_dir
             / str(server_id)
@@ -418,12 +480,15 @@ class ProcessManager:
         )
 
         if not log_file.exists():
+            logger.warning(f"Log file {log_file} does not exist")
             return ""
 
         try:
             with open(log_file, "r") as f:
                 all_lines = f.readlines()
-                return "".join(all_lines[-lines:])
-        except IOError:
+                content = "".join(all_lines[-lines:])
+                logger.trace(f"Retrieved {len(all_lines[-lines:])} lines from {log_file}")
+                return content
+        except IOError as e:
+            logger.error(f"Failed to read log file {log_file}: {e}")
             return ""
- 
