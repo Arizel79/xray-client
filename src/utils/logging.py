@@ -14,14 +14,16 @@ def setup_logging(settings: Settings) -> None:
     # Remove default handler
     logger.remove()
 
-    log_level = settings.log_level.upper()
+    # Определяем уровни для разных выводов
+    console_level = (settings.log_console_level or settings.log_level).upper()
+    file_level = (settings.log_file_level or settings.log_level).upper()
 
-    # Console logging (stderr with color)
+    # Console logging (stderr with simplified format)
     if settings.log_console_enabled:
         logger.add(
             sys.stderr,
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - {message}",
-            level=log_level,
+            format="[<level>{level}</level>] {message}",
+            level=console_level,
             colorize=True,
             enqueue=True,  # Thread-safe
         )
@@ -39,9 +41,7 @@ def setup_logging(settings: Settings) -> None:
         logger.add(
             str(log_file),
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-            level=log_level,
-            rotation=settings.log_rotation,
-            retention=settings.log_retention,
+            level=file_level,
             enqueue=True,
             backtrace=True,
             diagnose=True,
@@ -51,5 +51,6 @@ def setup_logging(settings: Settings) -> None:
     if not settings.log_console_enabled and not settings.log_file_enabled:
         logger.add(lambda msg: None, level="INFO")  # Null sink
 
-    logger.info("Logging configured (level={}, file={}, console={})",
-                log_level, settings.log_file_enabled, settings.log_console_enabled)
+    logger.debug("Logging configured: console={}, file={} (console_level={}, file_level={})",
+                 settings.log_console_enabled, settings.log_file_enabled,
+                 console_level, file_level)

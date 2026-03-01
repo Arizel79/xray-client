@@ -1,6 +1,8 @@
 """Generate xray-core JSON configuration from ServerConfig."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+from loguru import logger
 
 from src.core.config import ServerConfig, Settings
 
@@ -15,6 +17,7 @@ class ConfigGenerator:
             settings: Application settings
         """
         self.settings = settings or Settings()
+        logger.debug(f"ConfigGenerator initialized with log level: {self.settings.log_level}")
 
     def generate(self, server: ServerConfig) -> Dict[str, Any]:
         """Generate complete xray-core config for a server.
@@ -25,12 +28,17 @@ class ConfigGenerator:
         Returns:
             Dictionary with xray-core config
         """
+        logger.info(f"Generating xray-core config for server: {server.name} ({server.address}:{server.port})")
+        logger.debug(f"Server protocol: {server.protocol}, network: {server.network}, security: {server.security}")
+
         config = {
             "log": {"loglevel": self.settings.log_level},
             "inbounds": self._generate_inbounds(),
             "outbounds": [self._generate_outbound(server)],
         }
 
+        logger.success("Configuration generated successfully")
+        logger.trace(f"Full config: {config}")  # Only shown at TRACE level
         return config
 
     def _generate_inbounds(self) -> list:
@@ -39,7 +47,7 @@ class ConfigGenerator:
         Returns:
             List of inbound configs
         """
-        return [
+        inbounds = [
             {
                 "port": self.settings.listen_socks_port,
                 "listen": self.settings.listen_host,
@@ -55,6 +63,8 @@ class ConfigGenerator:
                 "tag": "http-in",
             },
         ]
+        logger.debug(f"Generated {len(inbounds)} inbound(s): SOCKS5 on {self.settings.listen_host}:{self.settings.listen_socks_port}, HTTP on {self.settings.listen_host}:{self.settings.listen_http_port}")
+        return inbounds
 
     def _generate_outbound(self, server: ServerConfig) -> Dict[str, Any]:
         """Generate outbound configuration for a server.
@@ -66,10 +76,13 @@ class ConfigGenerator:
             Outbound config dict
         """
         if server.protocol == "vless":
+            logger.debug(f"Generating VLESS outbound for {server.address}:{server.port}")
             return self._generate_vless_outbound(server)
         elif server.protocol == "vmess":
+            logger.debug(f"Generating VMess outbound for {server.address}:{server.port}")
             return self._generate_vmess_outbound(server)
         else:
+            logger.error(f"Unsupported protocol: {server.protocol}")
             raise ValueError(f"Unsupported protocol: {server.protocol}")
 
     def _generate_vless_outbound(self, server: ServerConfig) -> Dict[str, Any]:
@@ -104,7 +117,9 @@ class ConfigGenerator:
         # Add flow if present
         if server.flow:
             outbound["settings"]["vnext"][0]["users"][0]["flow"] = server.flow
+            logger.debug(f"VLESS flow set to: {server.flow}")
 
+        logger.trace(f"VLESS outbound config: {outbound}")
         return outbound
 
     def _generate_vmess_outbound(self, server: ServerConfig) -> Dict[str, Any]:
@@ -136,7 +151,7 @@ class ConfigGenerator:
             "streamSettings": self._generate_stream_settings(server),
             "tag": "proxy",
         }
-
+        logger.trace(f"VMess outbound config: {outbound}")
         return outbound
 
     def _generate_stream_settings(self, server: ServerConfig) -> Dict[str, Any]:
@@ -148,6 +163,8 @@ class ConfigGenerator:
         Returns:
             Stream settings dict
         """
+        logger.debug(f"Building stream settings: network={server.network}, security={server.security}")
+
         stream_settings = {
             "network": server.network,
         }
@@ -155,24 +172,32 @@ class ConfigGenerator:
         # Add transport settings based on network type
         if server.network == "tcp":
             stream_settings["tcpSettings"] = {}
+            logger.trace("Using TCP transport")
         elif server.network == "ws":
             stream_settings["wsSettings"] = self._generate_ws_settings(server)
+            logger.trace("Using WebSocket transport")
         elif server.network == "grpc":
             stream_settings["grpcSettings"] = self._generate_grpc_settings(server)
+            logger.trace("Using gRPC transport")
         elif server.network == "http":
             stream_settings["httpSettings"] = self._generate_http_settings(server)
+            logger.trace("Using HTTP/2 transport")
         elif server.network == "quic":
             stream_settings["quicSettings"] = {}
+            logger.trace("Using QUIC transport")
 
         # Add security settings
         if server.security in ["tls", "xtls"]:
             stream_settings["security"] = server.security
             stream_settings["tlsSettings"] = self._generate_tls_settings(server)
+            logger.debug(f"Security: {server.security} with TLS settings")
         elif server.security == "reality":
             stream_settings["security"] = "reality"
             stream_settings["realitySettings"] = self._generate_reality_settings(server)
+            logger.debug("Security: REALITY")
         else:
             stream_settings["security"] = "none"
+            logger.debug("Security: none")
 
         return stream_settings
 
@@ -189,9 +214,11 @@ class ConfigGenerator:
 
         if server.path:
             ws_settings["path"] = server.path
+            logger.trace(f"WebSocket path: {server.path}")
 
         if server.headers:
             ws_settings["headers"] = server.headers
+            logger.trace(f"WebSocket headers: {server.headers}")
 
         return ws_settings
 
@@ -208,6 +235,7 @@ class ConfigGenerator:
 
         if server.path:
             grpc_settings["serviceName"] = server.path
+            logger.trace(f"gRPC serviceName: {server.path}")
 
         return grpc_settings
 
@@ -224,9 +252,11 @@ class ConfigGenerator:
 
         if server.host:
             http_settings["host"] = [server.host]
+            logger.trace(f"HTTP host: {server.host}")
 
         if server.path:
             http_settings["path"] = server.path
+            logger.trace(f"HTTP path: {server.path}")
 
         return http_settings
 
@@ -243,17 +273,21 @@ class ConfigGenerator:
 
         if server.sni:
             tls_settings["serverName"] = server.sni
+            logger.trace(f"TLS SNI: {server.sni}")
 
         if server.alpn:
             # ALPN can be comma-separated
             alpn_list = [a.strip() for a in server.alpn.split(",")]
             tls_settings["alpn"] = alpn_list
+            logger.trace(f"TLS ALPN: {alpn_list}")
 
         if server.fingerprint:
             tls_settings["fingerprint"] = server.fingerprint
+            logger.trace(f"TLS fingerprint: {server.fingerprint}")
 
         # Allow insecure connections (useful for testing)
         tls_settings["allowInsecure"] = False
+        logger.trace("TLS allowInsecure: False")
 
         return tls_settings
 
@@ -270,23 +304,26 @@ class ConfigGenerator:
 
         if server.sni:
             reality_settings["serverName"] = server.sni
+            logger.trace(f"REALITY serverName: {server.sni}")
 
         if server.fingerprint:
             reality_settings["fingerprint"] = server.fingerprint
+            logger.trace(f"REALITY fingerprint: {server.fingerprint}")
 
         # REALITY-specific settings
         if server.public_key:
             reality_settings["publicKey"] = server.public_key
+            logger.trace(f"REALITY publicKey: {server.public_key}")
 
         if server.short_id:
             reality_settings["shortId"] = server.short_id
+            logger.trace(f"REALITY shortId: {server.short_id}")
 
         if server.spider_x:
             reality_settings["spiderX"] = server.spider_x
+            logger.trace(f"REALITY spiderX: {server.spider_x}")
 
         return reality_settings
-
-    # src/core/config_generator.py - добавить метод
 
     def generate_for_ports(
         self,
@@ -306,13 +343,16 @@ class ConfigGenerator:
         Returns:
             Dictionary with xray-core config
         """
+        logger.info(f"Generating config for server {server.name} with custom listen: host={listen_host}, socks_port={socks_port}, http_port={http_port}")
+
         config = {
             "log": {"loglevel": self.settings.log_level},
-            "inbounds": self._generate_inbounds_for_config(
-                listen_host, socks_port, http_port
-            ),
+            "inbounds": self._generate_inbounds_for_config(listen_host, socks_port, http_port),
             "outbounds": [self._generate_outbound(server)],
         }
+
+        logger.success("Custom configuration generated successfully")
+        logger.trace(f"Custom config: {config}")
         return config
 
     def _generate_inbounds_for_config(
@@ -321,7 +361,7 @@ class ConfigGenerator:
         """Generate inbound configurations with custom host and optional ports."""
         inbounds = []
 
-        # Добавляем SOCKS5 inbound если указан порт
+        # Add SOCKS5 inbound if port specified
         if socks_port is not None:
             inbounds.append(
                 {
@@ -332,8 +372,9 @@ class ConfigGenerator:
                     "tag": "socks-in",
                 }
             )
+            logger.debug(f"Custom SOCKS5 inbound: {listen_host}:{socks_port}")
 
-        # Добавляем HTTP inbound если указан порт
+        # Add HTTP inbound if port specified
         if http_port is not None:
             inbounds.append(
                 {
@@ -344,5 +385,9 @@ class ConfigGenerator:
                     "tag": "http-in",
                 }
             )
+            logger.debug(f"Custom HTTP inbound: {listen_host}:{http_port}")
+
+        if not inbounds:
+            logger.warning("No inbound ports specified; generated config will have no inbounds!")
 
         return inbounds

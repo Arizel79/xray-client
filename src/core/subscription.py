@@ -10,6 +10,7 @@ from src.parsers.base import BaseParser
 from src.parsers.vless import VLESSParser
 from src.parsers.vmess import VMessParser
 
+from loguru import logger
 
 class SubscriptionManager:
     """Manages subscription fetching and parsing."""
@@ -37,19 +38,27 @@ class SubscriptionManager:
             RuntimeError: If fetch fails
         """
         try:
+            logger.info(f"Fetching subscription {url} with headers: {headers}")
             with httpx.Client(timeout=timeout, follow_redirects=True) as client:
                 response = client.get(url, headers=headers)
+                logger.debug(f"Fetched, code: {response.status_code}")
                 response.raise_for_status()
                 return response.text
 
         except httpx.HTTPStatusError as e:
+            err = f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
+            logger.error(err)
             raise RuntimeError(
-                f"HTTP error {e.response.status_code}: {e.response.reason_phrase}"
+                err
             )
         except httpx.TimeoutException:
-            raise RuntimeError(f"Request timeout after {timeout} seconds")
+            err = f"Request timeout after {timeout} seconds"
+            logger.error(ferr)
+            raise RuntimeError(err)
         except httpx.RequestError as e:
-            raise RuntimeError(f"Request failed: {e}")
+            err = f"Request failed: {e}"
+            logger.error(err)
+            raise RuntimeError(err)
 
     def decode_subscription(self, content: str) -> List[str]:
         """Decode base64-encoded subscription content.
@@ -64,17 +73,22 @@ class SubscriptionManager:
             ValueError: If decoding fails
         """
         try:
+            logger.debug(f"Decoding subscription content: {content}")
             # Try to decode base64
             decoded = base64.b64decode(content).decode("utf-8")
 
             # Split by newlines and filter empty lines
             links = [line.strip() for line in decoded.split("\n") if line.strip()]
+            logger.debug(f"Decoded: {links}")
 
             return links
 
         except Exception as e:
+            logger.warning(f"Decoding subscription content failed: {e}")
+
             # If base64 decoding fails, maybe it's already plain text?
             # Try to split and see if we get valid links
+            logger.debug(f"Trying content as plain text")
             lines = [line.strip() for line in content.split("\n") if line.strip()]
 
             # Check if at least one line looks like a proxy link
@@ -82,6 +96,7 @@ class SubscriptionManager:
                 line.startswith(("vless://", "vmess://", "trojan://", "ss://"))
                 for line in lines
             ):
+                logger.debug(f"Plain text seems like vpn link found")
                 return lines
 
             raise ValueError(f"Failed to decode subscription: {e}")
@@ -104,14 +119,16 @@ class SubscriptionManager:
                 if protocol in self.parsers:
                     parser = self.parsers[protocol]
                     server = parser.parse(link)
+                    logger.debug(f"Parsed server: {server}")
                     servers.append(server)
                 else:
-                    print(f"Warning: Unsupported protocol in link: {link[:50]}...")
+                    logger.warning(f"Unsupported protocol in link: {link}...")
 
             except Exception as e:
-                print(f"Warning: Failed to parse link: {e}")
+                logger.warning(f"Failed to parse link: {e}")
                 continue
 
+        logger.debug(f"Parsed {len(servers)} servers (from {len(links)})")
         return servers
 
     def update_subscription(
@@ -139,6 +156,7 @@ class SubscriptionManager:
         servers = self.parse_links(links)
 
         if not servers:
+            logger.info("No valid servers found in subscription")
             raise ValueError("No valid servers found in subscription")
 
         return servers

@@ -6,6 +6,8 @@ from src.parsers.base import BaseParser
 from src.parsers.vless import VLESSParser
 from src.parsers.vmess import VMessParser
 
+import socket
+
 
 class ServerMixin:
     """Mixin for server-related operations."""

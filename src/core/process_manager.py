@@ -10,6 +10,8 @@ from typing import Dict, List, Optional
 
 import psutil
 
+from loguru import logger
+
 from src.core.config import ConfigManager, RunningInstance
 
 
@@ -223,14 +225,19 @@ class ProcessManager:
             try:
                 process = psutil.Process(inst.pid)
                 process.terminate()
+                logger.info(f"Terminating process: {inst.pid}")
                 try:
                     process.wait(timeout=timeout)
+                    logger.info(f"Process terminated: {inst.pid}")
                 except psutil.TimeoutExpired:
+                    logger.info(f"Process terminating timed out ({timeout}s), killing")
                     process.kill()
                     # После kill ждём немного, но если не умер – продолжаем, процесс будет помечен как stopped
+                    kill_timeout  =2 
                     try:
-                        process.wait(timeout=2)
+                        process.wait(timeout=kill_timeout)
                     except psutil.TimeoutExpired:
+                        logger.info(f"Process killing timed out ({kill_timeout}s), nothing doing")
                         # Даже если не умер, считаем, что запись недействительна
                         pass
                 inst.status = "stopped"
@@ -239,8 +246,7 @@ class ProcessManager:
                 inst.status = "stopped"
                 stopped = True
             except Exception as e:
-                print(f"Error stopping instance {inst_id}: {e}")
-                # В любом случае помечаем как остановленный, чтобы избежать конфликтов
+                logger.error(f"Error stopping instance {inst_id}: {e}")
                 inst.status = "stopped"
                 stopped = True
 

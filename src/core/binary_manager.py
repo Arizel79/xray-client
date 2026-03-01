@@ -9,6 +9,7 @@ from typing import Tuple
 
 import httpx
 
+from loguru import logger
 
 class BinaryManager:
     """Manages xray-core binary download and installation."""
@@ -47,6 +48,8 @@ class BinaryManager:
             "armv7l": "arm32-v7a",
         }
         arch = arch_map.get(machine, "64")
+
+        logger.info(f"Detected OS: {os_name}, arch: {arch}")
 
         return os_name, arch
 
@@ -114,7 +117,7 @@ class BinaryManager:
         # Get download URL
         download_url, version = self.get_download_url()
 
-        print(f"Downloading xray-core {version}...")
+        logger.info(f"Downloading xray-core from {download_url!r}...")
 
         # Download archive
         archive_path = self.bin_dir / "xray-temp.zip"
@@ -131,14 +134,14 @@ class BinaryManager:
                             downloaded += len(chunk)
                             if total:
                                 percent = (downloaded / total) * 100
-                                print(f"\rProgress: {percent:.1f}%", end="", flush=True)
-                    print()  # New line after progress
+                                if percent % 10 == 0:
+                                    logger.debug(f"Progress {percent:.1f}%", end="", flush=True)
 
         except httpx.HTTPError as e:
             raise RuntimeError(f"Download failed: {e}")
 
         # Extract archive
-        print("Extracting...")
+        logger.info("Extracting...")
         try:
             if archive_path.suffix == ".zip":
                 with zipfile.ZipFile(archive_path, "r") as zip_ref:
@@ -170,7 +173,7 @@ class BinaryManager:
         if platform.system() != "Windows":
             self.bin_path.chmod(0o755)
 
-        print(f"xray-core {version} installed successfully at {self.bin_path}")
+        logger.info(f"xray-core {version} installed successfully at {self.bin_path}")
         return self.bin_path
 
     def ensure_binary(self) -> Path:
@@ -187,6 +190,7 @@ class BinaryManager:
         Returns:
             Version string or None if binary not found
         """
+        logger.info(f"detecting xray ninary version...")
         if not self.bin_path.exists():
             return None
 
@@ -205,7 +209,9 @@ class BinaryManager:
                 if lines:
                     parts = lines[0].split()
                     if len(parts) >= 2:
-                        return parts[1]
+                        version = parts[1]
+                        logger.info(f"xray binary version: {version}")
+                        return version
         except Exception:
             pass
 

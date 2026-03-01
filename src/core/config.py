@@ -87,7 +87,16 @@ class Settings(BaseModel):
     update_interval_seconds: int = 60 * 30
     restart_xray_on_autoupdate: bool = True
 
-    log_level: str = "warning"
+    # Logging
+    xray_log_level: str = "warning" 
+
+    log_level: str = "INFO"               
+    log_file_enabled: bool = False
+    log_file_level: Optional[str] = "debug"
+    log_file_path: Optional[str] = None  
+    log_console_enabled: bool = False
+    log_console_level: Optional[str] = "info"
+
 
     # Subscriptions headers
     subscription_headers_enable: bool = False
