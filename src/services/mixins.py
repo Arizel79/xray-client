@@ -194,7 +194,7 @@ class ProcessMixin:
                 try:
                     s.bind((host, port))
                     logger.info(f"Port {host_port} available")
-                except socket.error:
+                except socket.error as e:
                     logger.debug(f"Port open failed: {e}")
                     logger.warning(f"Port {host_port} not available")
                     occupied.append(str(port))
