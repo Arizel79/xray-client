@@ -420,43 +420,4 @@ class ProcessManager:
                 return "".join(all_lines[-lines:])
         except IOError:
             return ""
-
-    # Backward compatibility methods
-    def is_running(self) -> bool:
-        """Legacy method: Check if any xray process is running."""
-        instances = self.list_running_instances()
-        return len(instances) > 0
-
-    def get_pid(self) -> Optional[int]:
-        """Legacy method: Get PID of first running instance."""
-        instances = self.list_running_instances()
-        return instances[0]["pid"] if instances else None
-
-    def start(self, xray_binary: Path, config: dict) -> None:
-        """Legacy method: Start with default ports."""
-        # Find first available server or use current
-        config_mgr = ConfigManager()
-        server = config_mgr.get_current_server()
-        if not server:
-            raise RuntimeError("No current server set")
-
-        config_obj = config_mgr.load()
-        self.start_instance(
-            server.id,
-            xray_binary,
-            config,
-            config_obj.settings.listen_socks_port,  # <-- Не хватает listen_host
-            config_obj.settings.listen_http_port,
-        )
-
-    def stop(self, timeout: int = 5) -> bool:
-        """Legacy method: Stop all instances."""
-        return self.stop_all(timeout) > 0
-
-    def get_status(self) -> dict:
-        """Legacy method: Get status of current server."""
-        config_mgr = ConfigManager()
-        server = config_mgr.get_current_server()
-        if server:
-            return self.get_instance_status(server.id)
-        return {"running": False}
+ 

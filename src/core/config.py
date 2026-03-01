@@ -329,30 +329,3 @@ class ConfigManager:
                 break
 
         self.save(config)
-
-    def set_current_server(self, server_id: Optional[int]) -> None:  # Изменено
-        """Set current active server.
-
-        Args:
-            server_id: Server ID or None to clear
-        """
-        config = self.load()
-        config.current_server = (
-            str(server_id) if server_id is not None else None
-        )  # Храним как строку для совместимости
-        self.save(config)
-
-    def get_current_server(self) -> Optional[ServerConfig]:
-        """Get current active server.
-
-        Returns:
-            Current server configuration or None
-        """
-        config = self.load()
-        if config.current_server:
-            try:
-                server_id = int(config.current_server)  # Преобразуем строку в int
-                return self.get_server(server_id)
-            except ValueError:
-                return None
-        return None
